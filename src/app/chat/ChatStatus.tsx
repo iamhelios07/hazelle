@@ -35,7 +35,7 @@ export function ChatStatusPeek({ status, held, decor, onHold, onPress, onUnmark 
 }
 
 const unmark = (script: Props['status'][number], onUnmark: Props['onUnmark']) => (
-  <IconButton icon={PinOff} size="xs" label={`상태창 지정 풀기 · ${script.name}`} onClick={() => onUnmark(script)} />
+  <IconButton icon={PinOff} size="sm" label={`상태창 지정 풀기 · ${script.name}`} onClick={() => onUnmark(script)} />
 );
 
 // One box has no head of its own: its 지정 풀기 sits with the drawer's actions.

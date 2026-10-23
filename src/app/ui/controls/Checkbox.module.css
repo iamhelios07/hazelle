@@ -8,8 +8,8 @@
 }
 
 .input {
-  width: var(--control-sm);
-  height: var(--control-sm);
+  width: var(--control-mark);
+  height: var(--control-mark);
   margin: 0;
   accent-color: var(--color-accent);
 }

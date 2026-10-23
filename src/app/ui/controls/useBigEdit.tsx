@@ -61,7 +61,7 @@ export function useBigEdit(keys: readonly Chord[] | undefined, title: string, bi
 
   return {
     wrap: { ref: field, onKeyDown },
-    button: keys && <IconButton icon={Maximize2} label={LABEL} title={`${LABEL} · ${formatKeys(keys)}`} size="xs" onClick={() => toggle(true)} />,
+    button: keys && <IconButton icon={Maximize2} label={LABEL} title={`${LABEL} · ${formatKeys(keys)}`} size="sm" onClick={() => toggle(true)} />,
     dialog: open && (
       <Dialog title={title} size="full" onClose={() => toggle(false)}>
         <div className={styles.fill} onKeyDown={onKeyDown}>

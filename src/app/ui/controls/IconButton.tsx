@@ -16,7 +16,7 @@ type Props = {
   popup?: 'menu' | 'dialog';
   expanded?: boolean;
   ref?: Ref<HTMLButtonElement>;
-  size?: 'xs' | 'sm' | 'md';
+  size?: 'sm' | 'md';
   disabled?: boolean;
   // Something behind it needs a look, such as a failure inside the menu it opens; the words are inside.
   dot?: boolean;
@@ -47,7 +47,7 @@ export function IconButton({ icon, label, title = label, onClick, pressed, curre
           {icon}
         </span>
       ) : (
-        <Icon icon={icon} size={framed ? 'lg' : size} />
+        <Icon icon={icon} size={size} />
       )}
       {dot && <span className={styles.dot} aria-hidden />}
       {count > 0 && (

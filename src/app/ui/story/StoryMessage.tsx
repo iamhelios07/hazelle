@@ -136,14 +136,13 @@ type SwitcherProps = {
   pick?: { versions: string[]; selected: number; disabled: boolean; onPick: (index: number) => void };
   // down: to what stands above and below, such as search hits.
   axis?: 'across' | 'down';
-  size?: 'xs' | 'sm';
 };
 
-export function Switcher({ count, prev, next, pick, axis = 'across', size = 'xs' }: SwitcherProps) {
+export function Switcher({ count, prev, next, pick, axis = 'across' }: SwitcherProps) {
   const [before, after] = axis === 'across' ? [ChevronLeft, ChevronRight] : [ChevronUp, ChevronDown];
   return (
     <div className={pick ? `${styles.switcher} ${styles.versions}` : styles.switcher}>
-      <IconButton icon={before} label={prev.label} title={prev.title} size={size} disabled={prev.disabled} onClick={prev.onClick} />
+      <IconButton icon={before} label={prev.label} title={prev.title} size="sm" disabled={prev.disabled} onClick={prev.onClick} />
       {pick ? (
         <Menu
           label="버전 선택"
@@ -161,7 +160,7 @@ export function Switcher({ count, prev, next, pick, axis = 'across', size = 'xs'
       ) : (
         count && <span className={styles.count} aria-live="polite">{count}</span>
       )}
-      <IconButton icon={after} label={next.label} title={next.title} size={size} disabled={next.disabled} onClick={next.onClick} />
+      <IconButton icon={after} label={next.label} title={next.title} size="sm" disabled={next.disabled} onClick={next.onClick} />
     </div>
   );
 }

@@ -76,7 +76,7 @@
 }
 
 .segmented .choice {
-  min-height: var(--control-tool);
+  min-height: var(--control-chip);
   padding: 0 var(--space-8);
   border-color: transparent;
   border-radius: var(--radius-sm);

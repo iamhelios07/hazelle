@@ -1,8 +1,8 @@
 .switch {
   position: relative;
   flex: none;
-  width: calc(var(--control-sm) * 2);
-  height: var(--control-sm);
+  width: calc(var(--control-mark) * 2);
+  height: var(--control-mark);
   margin: 0;
   border: var(--border-thin) solid var(--color-border-strong);
   border-radius: var(--radius-full);
@@ -29,7 +29,7 @@
 }
 
 .switch:checked::before {
-  inset-inline-start: calc(100% - var(--control-sm) + 2px);
+  inset-inline-start: calc(100% - var(--control-mark) + 2px);
   background: var(--color-on-accent);
 }
 

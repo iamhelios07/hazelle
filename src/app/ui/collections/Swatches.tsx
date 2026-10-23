@@ -36,7 +36,7 @@ export function Swatches({ label, sample, items, onMove }: { label: string; samp
           </button>
           {menu && (
             <span className={styles.menu}>
-              <MoreMenu of={name} size="xs">
+              <MoreMenu of={name}>
                 {menu}
               </MoreMenu>
             </span>

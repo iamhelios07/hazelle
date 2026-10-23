@@ -134,7 +134,7 @@ export function IconCard({ icon, name, note, onClick }: { icon: LucideIcon; name
     <div className={styles.cardBox}>
       <button type="button" className={styles.card} onClick={onClick}>
         <span className={`${styles.picture} ${styles.iconPicture}`}>
-          <Icon icon={icon} size="lg" />
+          <Icon icon={icon} />
         </span>
         <span className={styles.name}>{name}</span>
         <span className={styles.detail}>{note}</span>
@@ -163,7 +163,7 @@ export function FolderCard({ name, note, faces, onClick, menu, onDropCard, drag,
           <span className={styles.body}>
             {shown.length === 0 ? (
               <span className={styles.emptyFolder}>
-                <FolderMark size="lg" />
+                <FolderMark size="md" />
               </span>
             ) : (
               [...shown, ...Array<null>(4 - shown.length).fill(null)].map((face, index) => <span key={index} className={styles.slot}>{face && <Face {...face} still={drag !== undefined} />}</span>)

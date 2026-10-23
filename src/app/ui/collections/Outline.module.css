@@ -372,7 +372,7 @@
 
 .buttons .button {
   grid-template-columns: var(--outline-number) var(--outline-node-chat) minmax(0, 1fr);
-  padding-right: calc(var(--control-tool) * 2 + var(--space-8));
+  padding-right: calc(var(--control-chip) * 2 + var(--space-8));
 }
 
 .arrows {

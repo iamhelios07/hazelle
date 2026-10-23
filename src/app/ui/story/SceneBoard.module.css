@@ -48,7 +48,7 @@
 
 .move {
   min-width: 0;
-  height: var(--control-tool);
+  height: var(--control-chip);
   padding: 0 var(--space-4);
   color: var(--color-text);
   font-size: var(--text-sm);

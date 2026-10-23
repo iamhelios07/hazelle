@@ -86,11 +86,11 @@ export function ChatPicture({ place, message, running, url, draws, sizes, onDraw
             <Text variant="note">{`${withParticle(moduleName(value.tool.name), '이/가')} 만든 이미지`}</Text>
           ) : draws && (
             <>
-              <IconButton icon={ACTS.regenerate.icon} size="xs" label="다시 그리기" disabled={running} onClick={() => onDraw(message.id, version, scene)} />
-              <IconButton icon={SlidersHorizontal} size="xs" label="장면 바꾸기" onClick={() => onReshape({ message: message.id, version, scene: scene!, sent: value.sent, paragraphs: paragraphsOf(text).length })} />
+              <IconButton icon={ACTS.regenerate.icon} size="sm" label="다시 그리기" disabled={running} onClick={() => onDraw(message.id, version, scene)} />
+              <IconButton icon={SlidersHorizontal} size="sm" label="장면 바꾸기" onClick={() => onReshape({ message: message.id, version, scene: scene!, sent: value.sent, paragraphs: paragraphsOf(text).length })} />
             </>
           )}
-          <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} onClick={() => onDrop(picture)} />
+          <IconButton icon={ACTS.remove.icon} size="sm" label={ACTS.remove.label} onClick={() => onDrop(picture)} />
         </>
       }
     />

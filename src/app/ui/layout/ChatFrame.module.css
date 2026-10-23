@@ -17,7 +17,7 @@
   --story-lead: max(0px, calc((100% - var(--read-width)) / 2));
   /* A 삽화's most height (StoryPicture): what the screen shows between the header and the composer, less its foot row,
      so a picture stuck under the header (MarginPicture) ends above the composer. */
-  --story-illustration-most: calc(100dvh - var(--header-height) - var(--footer-space) - var(--control-tool) - 3 * var(--space-8));
+  --story-illustration-most: calc(100dvh - var(--header-height) - var(--footer-space) - var(--control-chip) - 3 * var(--space-8));
 }
 
 /* The stage's width, --story-margin, and the story's lead beside it, --story-stage-lead, are measured in ChatFrame.tsx. */
@@ -332,7 +332,7 @@
   /* The gutter is narrower than what stands in it, so its foot clears the last message's tools, which stand above the
      맨 아래로 pill (StoryMessage.module.css .foot). */
   .edge {
-    bottom: calc(var(--footer-height) + var(--space-12) + var(--control-chip) + var(--space-8) + var(--control-tool) + 2 * var(--space-2) + 2 * var(--border-thin) + var(--space-8));
+    bottom: calc(var(--footer-height) + var(--space-12) + var(--control-chip) + var(--space-8) + var(--control-chip) + 2 * var(--space-2) + 2 * var(--border-thin) + var(--space-8));
   }
 
   .chevron {

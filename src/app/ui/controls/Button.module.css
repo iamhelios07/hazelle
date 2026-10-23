@@ -117,8 +117,8 @@
   position: absolute;
   inset: 0;
   margin: auto;
-  width: var(--control-sm);
-  height: var(--control-sm);
+  width: var(--control-mark);
+  height: var(--control-mark);
   border: var(--border-thick) solid currentColor;
   border-right-color: transparent;
   border-radius: var(--radius-full);

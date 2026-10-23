@@ -54,7 +54,7 @@
 }
 
 .helped .label {
-  padding-right: var(--control-sm);
+  padding-right: var(--control-mark);
 }
 
 .help {

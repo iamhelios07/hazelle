@@ -11,12 +11,6 @@
   transition: background-color var(--duration-fast), color var(--duration-fast);
 }
 
-.xs {
-  width: var(--control-tool);
-  height: var(--control-tool);
-  border-radius: var(--radius-sm);
-}
-
 .sm {
   width: var(--control-chip);
   height: var(--control-chip);

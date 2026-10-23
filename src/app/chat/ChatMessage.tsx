@@ -204,9 +204,9 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       <Marker reason="translation" label="원문 수정됨" action={canTranslate ? again : undefined} />
     ) : null;
   const translateTool = translation ? (
-    !both && <IconButton icon={Languages} size="xs" label={sentTranslated ? '보낸 메시지 보기' : '원문 보기'} pressed={flipped} onClick={() => actions.flipTranslation(message)} />
+    !both && <IconButton icon={Languages} size="sm" label={sentTranslated ? '보낸 메시지 보기' : '원문 보기'} pressed={flipped} onClick={() => actions.flipTranslation(message)} />
   ) : (
-    canTranslate && !empty && !failed && <IconButton icon={Languages} size="xs" label="번역" disabled={translatingText !== null} onClick={translateHere} />
+    canTranslate && !empty && !failed && <IconButton icon={Languages} size="sm" label="번역" disabled={translatingText !== null} onClick={translateHere} />
   );
   const translateAgain = canTranslate && translation && !sentTranslated && <MenuItem label="다시 번역" disabled={translatingText !== null} onClick={translateHere} />;
   // The language it went out in, not the setting now.
@@ -255,12 +255,12 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
     offered.length === 1 ? (
       <IconButton
         icon={only!.marked ? PinOff : Pin}
-        size="xs"
+        size="sm"
         label={`${only!.marked ? '상태창 지정 풀기' : '상태창으로 지정'} · ${only!.name}`}
         onClick={() => actions.markStatus(only!, !only!.marked)}
       />
     ) : offered.length > 1 ? (
-      <Menu place="below-end" label="상태창으로 지정" trigger={(opener) => <IconButton icon={Pin} size="xs" label="상태창으로 지정" {...opener} />}>
+      <Menu place="below-end" label="상태창으로 지정" trigger={(opener) => <IconButton icon={Pin} size="sm" label="상태창으로 지정" {...opener} />}>
         <MenuHeading>상태창으로 지정할 블록</MenuHeading>
         {offered.map((script) => (
           <MenuItem key={script.id} label={script.name} checked={script.marked} onClick={() => actions.markStatus(script, !script.marked)} />
@@ -286,10 +286,10 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   ) : opening ? (
     <>
       {translateTool}
-      {!empty && <IconButton icon={ACTS.copy.icon} size="xs" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
+      {!empty && <IconButton icon={ACTS.copy.icon} size="sm" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
       {statusTool}
       {translateAgain && (
-        <MoreMenu of="메시지" size="xs" place="end">
+        <MoreMenu of="메시지" place="end">
           {translateAgain}
         </MoreMenu>
       )}
@@ -297,14 +297,14 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
   ) : (
     <>
       {remark && <Remark remark={remark} fresh={fresh} onSeen={() => actions.seeRemark(remark.id)} />}
-      {!mine && !greeting && !failed && !busy && <IconButton icon={ACTS.regenerate.icon} size="xs" label={ACTS.regenerate.label} onClick={() => actions.regenerate(message)} />}
-      {!mine && failed && !busy && <IconButton icon={ACTS.retry.icon} size="xs" label={ACTS.retry.label} onClick={() => actions.retry(message)} />}
+      {!mine && !greeting && !failed && !busy && <IconButton icon={ACTS.regenerate.icon} size="sm" label={ACTS.regenerate.label} onClick={() => actions.regenerate(message)} />}
+      {!mine && failed && !busy && <IconButton icon={ACTS.retry.icon} size="sm" label={ACTS.retry.label} onClick={() => actions.retry(message)} />}
       {translateTool}
-      {!failed && <IconButton icon={SquarePen} size="xs" label="수정" onClick={() => actions.edit(message, selected?.part ?? null)} />}
-      {!empty && <IconButton icon={ACTS.copy.icon} size="xs" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
-      {bookmarked && <IconButton icon={Bookmark} size="xs" label={BOOKMARK} pressed onClick={() => actions.bookmark(message.id)} />}
+      {!failed && <IconButton icon={SquarePen} size="sm" label="수정" onClick={() => actions.edit(message, selected?.part ?? null)} />}
+      {!empty && <IconButton icon={ACTS.copy.icon} size="sm" label={ACTS.copy.label} onClick={() => actions.copy(text)} />}
+      {bookmarked && <IconButton icon={Bookmark} size="sm" label={BOOKMARK} pressed onClick={() => actions.bookmark(message.id)} />}
       {!failed ? (
-        <MoreMenu of="메시지" size="xs" place="end">
+        <MoreMenu of="메시지" place="end">
           {translateAgain}
           {canIllustrate && !mine && !empty && (
             <MenuItem label="삽화" disabled={running} onClick={() => actions.draw(message.id, version.id)} />
@@ -325,13 +325,13 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
           ])}
         </MoreMenu>
       ) : (
-        !mine && <IconButton icon={Info} size="xs" label="응답 정보" onClick={() => actions.info(message.id)} />
+        !mine && <IconButton icon={Info} size="sm" label="응답 정보" onClick={() => actions.info(message.id)} />
       )}
       <Divider variant="tools" />
       {last ? (
-        <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} onClick={() => actions.remove(message)} />
+        <IconButton icon={ACTS.remove.icon} size="sm" label={ACTS.remove.label} onClick={() => actions.remove(message)} />
       ) : (
-        <Menu place="end" label="메시지 삭제" trigger={(opener) => <IconButton icon={ACTS.remove.icon} size="xs" label={ACTS.remove.label} {...opener} />}>
+        <Menu place="end" label="메시지 삭제" trigger={(opener) => <IconButton icon={ACTS.remove.icon} size="sm" label={ACTS.remove.label} {...opener} />}>
           <MenuItem label="이 메시지만 삭제" tone="warn" onClick={() => actions.remove(message)} />
           <MenuItem label="여기부터 끝까지 삭제" tone="warn" onClick={() => actions.removeFrom(message)} />
         </Menu>

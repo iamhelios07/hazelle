@@ -50,7 +50,7 @@ export function ChatSearch({ search, onSearch, onStep, onClose }: Props) {
             next={{ label: SHORTCUTS.findNext.label, title: titled(SHORTCUTS.findNext.label, SHORTCUTS.findNext.keys), disabled: none, onClick: () => onStep(1) }}
             axis="down"
           />
-          <IconButton icon={X} size="xs" label={SHORTCUTS.closeFind.label} title={titled(SHORTCUTS.closeFind.label, SHORTCUTS.closeFind.keys)} onClick={onClose} />
+          <IconButton icon={X} size="sm" label={SHORTCUTS.closeFind.label} title={titled(SHORTCUTS.closeFind.label, SHORTCUTS.closeFind.keys)} onClick={onClose} />
         </>
       }
     />

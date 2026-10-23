@@ -36,7 +36,7 @@ export function SidePeek({ label, open, onOpenChange, actions, children }: Props
         <div className={styles.head}>
           <h2 className={styles.title}>{label}</h2>
           {actions}
-          {open && <IconButton icon={X} size="xs" label={`${label} 닫기`} onClick={() => onOpenChange(false)} />}
+          {open && <IconButton icon={X} size="sm" label={`${label} 닫기`} onClick={() => onOpenChange(false)} />}
         </div>
         <div className={styles.body}>{children}</div>
       </aside>

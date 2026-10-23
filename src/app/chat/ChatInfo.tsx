@@ -71,7 +71,6 @@ export function ChatInfo({ id: chat, shelf, messages, infoPick, tab: picked, onT
       count={`${at + 1} / ${replies.length}`}
       prev={{ label: '이전 응답 정보', disabled: at <= 0, onClick: () => onPick(replies[at - 1]!.id) }}
       next={{ label: '다음 응답 정보', disabled: at >= replies.length - 1, onClick: () => onPick(replies[at + 1]!.id) }}
-      size="sm"
     />
   );
 

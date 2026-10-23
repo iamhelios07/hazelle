@@ -30,7 +30,7 @@ export function Toast({ message, detail, tone, action, from, onKeep, onClose, li
   const [open, setOpen] = useState(false);
   const close = onClose && (
     <span className={styles.close}>
-      <IconButton icon={X} size="xs" label="닫기" onClick={onClose} />
+      <IconButton icon={X} size="sm" label="닫기" onClick={onClose} />
     </span>
   );
   return (

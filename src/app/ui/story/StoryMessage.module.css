@@ -68,7 +68,7 @@
   display: flex;
   align-items: baseline;
   gap: var(--space-8);
-  min-height: var(--control-sm);
+  min-height: var(--control-mark);
 }
 
 .name,
@@ -90,7 +90,7 @@
   display: inline-flex;
   align-self: center;
   align-items: center;
-  height: var(--control-sm);
+  height: var(--control-mark);
   padding: 0 var(--space-8);
   border-radius: var(--radius-xs);
   background: var(--color-surface-raised);
@@ -156,7 +156,7 @@
   flex-wrap: wrap;
   align-items: flex-end;
   gap: var(--space-8);
-  min-height: calc(var(--control-tool) + var(--space-2) * 2 + var(--border-thin) * 2);
+  min-height: calc(var(--control-chip) + var(--space-2) * 2 + var(--border-thin) * 2);
 }
 
 @supports (container-type: scroll-state) {

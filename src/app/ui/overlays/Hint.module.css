@@ -9,8 +9,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: var(--control-sm);
-  height: var(--control-sm);
+  width: var(--control-mark);
+  height: var(--control-mark);
   border-radius: var(--radius-full);
   color: var(--color-text-faint);
 }

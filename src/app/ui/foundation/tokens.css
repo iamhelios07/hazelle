@@ -362,7 +362,8 @@
   --radius-lg: 16px;
   --radius-full: 999px;
 
-  --control-sm: 20px;
+  /* The tick box, the switch's knob, the ⓘ and the spinner: a mark in a control, not a step of the control heights. */
+  --control-mark: 20px;
   --control-xs: 28px;
   --control-chip: 34px;
   --control-md: 44px;
@@ -370,7 +371,6 @@
   --icon-xs: 16px;
   --icon-sm: 18px;
   --icon-md: 22px;
-  --icon-lg: 24px;
   /* An icon inside a Tag, a step under the xs icon to sit in its small line. */
   --icon-tag: 14px;
   --row-min-height: 64px;
@@ -437,7 +437,6 @@
   --preview-max-height: 60dvh;
   --header-height: 60px;
   --control-compact: 38px;
-  --control-tool: 32px;
   --avatar-sm: 22px;
   --avatar-md: 32px;
   /* The rail's faces, the only ones between a row's and a card's. */

@@ -165,19 +165,19 @@ export function Outline({ label, help, start, end, stops, current, onPick, onOpe
                     {stop.cache !== 'auto' && (
                       <IconButton
                         icon={Bookmark}
-                        size="xs"
+                        size="sm"
                         label={`'${stop.title}'까지 캐시`}
                         title={stop.cache ? '캐시 지점 해제' : '여기까지 캐시'}
                         pressed={stop.cache === 'set'}
                         onClick={() => onCache(stop.id)}
                       />
                     )}
-                    <IconButton icon={X} size="xs" label={`'${stop.title}' 빼기`} title="빼기" onClick={() => onRemove(stop.id)} />
+                    <IconButton icon={X} size="sm" label={`'${stop.title}' 빼기`} title="빼기" onClick={() => onRemove(stop.id)} />
                   </span>
                 ) : (
                   <span className={styles.arrows}>
-                    <IconButton icon={ArrowUp} size="xs" label={`'${stop.title}' 위로`} disabled={index === 0} onClick={() => move(index, index - 1)} />
-                    <IconButton icon={ArrowDown} size="xs" label={`'${stop.title}' 아래로`} disabled={index === stops.length - 1} onClick={() => move(index, index + 1)} />
+                    <IconButton icon={ArrowUp} size="sm" label={`'${stop.title}' 위로`} disabled={index === 0} onClick={() => move(index, index - 1)} />
+                    <IconButton icon={ArrowDown} size="sm" label={`'${stop.title}' 아래로`} disabled={index === stops.length - 1} onClick={() => move(index, index + 1)} />
                   </span>
                 )}
               </div>

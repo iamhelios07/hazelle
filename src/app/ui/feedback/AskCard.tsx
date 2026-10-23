@@ -25,7 +25,7 @@ export function AskCard({ from, text, help, answer, onAnswer }: Props) {
       <div className={styles.head}>
         <Avatar face={from.name} image={from.face} size="sm" />
         <span className={styles.name}>{from.name}</span>
-        <IconButton icon={X} size="xs" label="닫기" onClick={() => onAnswer(null)} />
+        <IconButton icon={X} size="sm" label="닫기" onClick={() => onAnswer(null)} />
       </div>
       {text && (
         <div className={styles.asked}>

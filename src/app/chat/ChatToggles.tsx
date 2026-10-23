@@ -54,7 +54,7 @@ export function ChatToggles({ card, toggles, toggleOwner, onFlip, onWrite, onRes
       changed={changed}
       sub={changed ? defaultOf(toggle) : undefined}
       wide={toggle.kind === 'text'}
-      action={toggle.kind !== 'text' && <IconButton icon={Pin} size="xs" label="입력창에 고정" pressed={pinned.has(toggle.key)} onClick={() => void pinToggle(store, toggle.key, !pinned.has(toggle.key))} />}
+      action={toggle.kind !== 'text' && <IconButton icon={Pin} size="sm" label="입력창에 고정" pressed={pinned.has(toggle.key)} onClick={() => void pinToggle(store, toggle.key, !pinned.has(toggle.key))} />}
       control={
         toggle.kind === 'check' ? (
           <Switch label={toggle.label} checked={value === '1'} onChange={(on) => onFlip(toggle.key, on ? '1' : '0')} />

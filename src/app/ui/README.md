@@ -31,7 +31,7 @@ and only this folder styles elements.**
 
 - Components take variants, never `className` or `style`; a screen that needs a new look extends a component or adds
   one here. Each prop word has one meaning across the kit:
-  - `variant`: which of a component's looks. `size`: how large, a step of a short scale; a slot may decide it.
+  - `variant`: which of a component's looks. `size`: how large, a step of a short scale; a slot may decide it. A control's `xs`, `sm`, `md` and `lg` are `--control-xs`, `--control-chip`, `--control-md` and `--control-lg` on every control that takes them.
     `tone`: the colour of what it says: `plain` for neutral, then `muted`, `accent`, `warn` and a component's own
     (a branch, the user's own, faded).
   - `kind`: what a group holds (a toolbar, actions, tags; a menu or a dialog). `gap`: the named room between a
@@ -86,6 +86,7 @@ One kind of thing looks and reads one way on every screen. The kit decides what 
   that cannot be empty steps with a `Stepper`; an override that can be empty, so the default applies, is an emptyable
   number field (`NumberInput`), as the retries are. Explanations go behind ⓘ (`help`), never as visible prose.
 - **Focus rings are never cut.** The global ring sits `--focus-ring-reach` outside its element, and a box that scrolls or clips cuts whatever passes its padding. So a field (`surface` `field`, `SearchField`) and a row in a `List box` draw the ring inside, and a scrolling box with no padding of its own keeps that reach as padding, given back with a negative margin (`Dialog`'s body, `Sidebar`'s rail, `AskCard`'s choices). A new scrolling box does the same.
+- **Focus in a place to write shows one of two ways.** A field in a form takes the ring. A place written in where a ring would shout strengthens its own border instead: the composer, a title that renames, the chat header's search, a message edited in place (`EditBox`).
 - **Width:** settings pages are `page` or `form`, by what the page holds (`Panel`, `Columns`, `PickCard`, `Table` want `page`; a column of rows, `form`); item editors are `form`; a one-step flow (a key, a sign-in) is `narrow`.
 
 ## Components

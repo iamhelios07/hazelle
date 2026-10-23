@@ -79,7 +79,7 @@ export function SceneBoard({ label, help, width, height, figures, onMove, onRemo
               >
                 <span className={styles.name}>{figure.name}</span>
               </button>
-              <IconButton icon={X} size="xs" label={`${figure.name} 빼기`} onClick={() => onRemove(index)} />
+              <IconButton icon={X} size="sm" label={`${figure.name} 빼기`} onClick={() => onRemove(index)} />
             </div>
           );
         })}
