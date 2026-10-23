@@ -63,6 +63,7 @@ const size = ({ request, response }: LogEntry) => (request?.body?.length ?? 0) +
 export class RequestLog {
   private readonly chats = new Map<string | null, { log: ChatLog; characters: number }>();
   private readonly changes = new ChangeSignal();
+  private readonly recorded = new Set<(entry: LogEntry) => void>();
   private readonly leave: () => void;
 
   constructor(store: Pick<ObjectStore, 'subscribe' | 'scopeState'>) {
@@ -75,6 +76,12 @@ export class RequestLog {
   }
 
   readonly subscribe = this.changes.subscribe;
+
+  // Each call as it ends, whatever its chat.
+  readonly onRecord = (listener: (entry: LogEntry) => void) => {
+    this.recorded.add(listener);
+    return () => void this.recorded.delete(listener);
+  };
 
   readonly of = (chat: string): ChatLog => this.chats.get(chat)?.log ?? EMPTY;
 
@@ -95,6 +102,7 @@ export class RequestLog {
     }
     this.chats.set(entry.chat, { log: { entries, omitted }, characters });
     this.changes.notify();
+    for (const listener of this.recorded) listener(entry);
   }
 
   // forecast: what the send expected of the cache, as its receipt keeps it.
@@ -112,5 +120,6 @@ export class RequestLog {
     this.chats.clear();
     this.changes.notify();
     this.changes.clear();
+    this.recorded.clear();
   }
 }

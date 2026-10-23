@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { RETRIES } from '../../connectors/registry';
 import { RETRY_MOST } from '../../contracts/streams';
-import { ANSWER_INSTRUCTION, answerInstructionOf, LORE_BUDGET, loreBudgetOf, setAnswerInstruction, setLoreBudget } from '../../runtime/chat-context';
+import type { UsageNoticeKind } from '../../model/settings';
+import { ANSWER_INSTRUCTION, answerInstructionOf, LORE_BUDGET, loreBudgetOf, setAnswerInstruction, setLoreBudget, setUsageNotices } from '../../runtime/chat-context';
 import { setSharedRetries } from '../../runtime/connections';
+import { availableFeatures } from '../../runtime/features';
+import { USAGE_NOTICE_NAMES } from '../common/calls';
 import { DetailFold } from '../common/DetailFold';
 import { filled, typedText, useTypedNumber } from '../common/typed';
 import { count, readCount } from '../common/typedNumber';
@@ -10,16 +13,17 @@ import { useAutosave } from '../common/useAutosave';
 import { ANSWER_INSTRUCTION_LABEL, LORE_BUDGET_LABEL, MODEL_SETTINGS, RETRY_COUNT, RETRY_HELP } from '../common/words';
 import { useSettings, useStore } from '../session';
 import { useToast } from '../toast';
-import { NumberInput, SettingRow, Stepper, TextField } from '../ui';
+import { Checkbox, NumberInput, SettingRow, Stack, Stepper, Switch, TextField } from '../ui';
 
 export function ChatDetailDefaults() {
   const store = useStore();
   const toast = useToast();
-  const { retries, loreBudget, answerInstruction } = useSettings();
+  const settings = useSettings();
+  const { retries, loreBudget, answerInstruction, usageNotices } = settings;
   const save = useAutosave<{ loreBudget: number }>('lore-budget', (patch) => setLoreBudget(store, patch.loreBudget!));
   const budget = useTypedNumber(readCount, save.unsaved.loreBudget ?? loreBudgetOf(store), { error: '1 이상의 정수를 입력해 주세요.', onChange: (value) => save.change({ loreBudget: value }) });
   return (
-    <DetailFold set={[retries, loreBudget, answerInstruction].filter((value) => value !== undefined).length}>
+    <DetailFold set={[retries, loreBudget, answerInstruction, usageNotices].filter((value) => value !== undefined).length}>
       <SettingRow
         label={RETRY_COUNT}
         help={`${RETRY_HELP} API 연결이나 ${MODEL_SETTINGS}마다 따로 정할 수도 있어요.`}
@@ -44,6 +48,7 @@ export function ChatDetailDefaults() {
         control={<NumberInput label={LORE_BUDGET_LABEL} unit="토큰" value={budget.text} invalid={budget.error !== undefined} onChange={budget.change} />}
       />
       <AnswerInstructionField changed={answerInstruction !== undefined} />
+      <UsageNoticesRows kinds={usageNotices} shown={['reply', ...availableFeatures(settings), 'script', 'embedding']} />
     </DetailFold>
   );
 }
@@ -69,3 +74,35 @@ function AnswerInstructionField({ changed }: { changed: boolean }) {
     />
   );
 }
+
+// A kind kept from an experiment since switched off is dropped by the next change, so no hidden box keeps the switch on.
+function UsageNoticesRows({ kinds, shown }: { kinds: UsageNoticeKind[] | undefined; shown: UsageNoticeKind[] }) {
+  const store = useStore();
+  const toast = useToast();
+  const save = (next: UsageNoticeKind[]) => void setUsageNotices(store, next.filter((kind) => shown.includes(kind))).then((result) => result.ok || toast.failed(result));
+  return (
+    <>
+      <SettingRow
+        label={USAGE_NOTICES}
+        help="모델 요청이 끝날 때마다 입력·출력 토큰과 비용을 잠깐 띄워요."
+        changed={kinds !== undefined}
+        control={<Switch label={USAGE_NOTICES} checked={kinds !== undefined} onChange={(on) => save(on ? ['reply'] : [])} />}
+      />
+      {kinds && (
+        <SettingRow
+          label="알릴 요청"
+          wide
+          control={
+            <Stack gap="related">
+              {shown.map((kind) => (
+                <Checkbox key={kind} label={USAGE_NOTICE_NAMES[kind]} checked={kinds.includes(kind)} onChange={(on) => save(on ? [...kinds, kind] : kinds.filter((held) => held !== kind))} />
+              ))}
+            </Stack>
+          }
+        />
+      )}
+    </>
+  );
+}
+
+const USAGE_NOTICES = '사용량 알림';

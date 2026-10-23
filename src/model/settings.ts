@@ -1,6 +1,6 @@
 import type { Assignment } from '../connectors/assignment';
 import type { TranslateSwitches } from './chat';
-import type { FeatureSwitches } from './features';
+import type { Feature, FeatureSwitches } from './features';
 import type { IllustrateSwitches } from './illustration';
 import type { MemorySettings } from './memory';
 import type { ToggleValues } from './prompt';
@@ -20,6 +20,8 @@ export const labOn = (settings: Pick<Settings, 'labs'> | undefined, id: LabId) =
 // thinkLess: the call asks for the least thinking its model takes, over its 설정 묶음.
 export type PrereadParts = { chat: boolean; system: boolean; lore: boolean };
 export type PrereadSettings = { parts: PrereadParts; recent: number; batch: number; thinkLess: boolean };
+
+export type UsageNoticeKind = 'reply' | 'script' | 'embedding' | Feature;
 
 // prompt: the default prompt, absent only until the starter prompt is added; translatePrompt the default translation
 // prompt, memoryPrompt the default memory prompt, illustratePrompt the default 삽화 prompt, mascotPrompt the default 마스코트
@@ -73,6 +75,9 @@ export type Settings = {
   // Its fields absent read through runtime/preread prereadSetup.
   preread?: Partial<PrereadSettings>;
   answerInstruction?: string;
+  // 사용량 알림: the kinds of call whose end this account's pages say with their usage (app/shell/UsageNotices); absent
+  // is off, so turning off the last kind turns it off.
+  usageNotices?: UsageNoticeKind[];
   // 헤이젤 나우 (design §6.12): false stops every usage label this account's pages send; absent shares (the default).
   pulse?: false;
 };
