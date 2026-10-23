@@ -1,5 +1,6 @@
 import type { Cost, Usage } from '../../connectors/types';
 import type { Receipt } from '../../model/chat';
+import type { UsagePart } from '../ui';
 import { money } from './money';
 import { count } from './typedNumber';
 import { UNKNOWN } from './words';
@@ -43,16 +44,16 @@ export function cacheShare(usage: Usage | null): number | null {
 // 사용량 표시: the line under a reply, led by its cost, and the facts it opens. Neither shows a cost the app does not
 // know (the user's pick, 2026-10-24; 응답 정보 still says it); the line also leaves out an unreported cache, which the
 // facts read as unknown. A cost still booking stays in both, as such.
-export function usageLine(receipt: Receipt): { lead: string | null; line: string } {
+export function usageLine(receipt: Receipt): { lead: string | null; parts: UsagePart[] } {
   const { usage } = receipt;
   const share = cacheShare(usage);
-  const line = [
-    ...(usage ? [`입력 ${tokens(usage.inputTokens)}`, `출력 ${tokens(usage.outputTokens)}`] : [`사용량 ${UNKNOWN}`]),
-    ...(share === null ? [] : [`캐시 ${share}%`]),
-    ...(receipt.cost === 'pending' ? [`비용 ${cost('pending')}`] : []),
-    seconds(receipt.totalMs),
+  const parts: UsagePart[] = [
+    ...(usage ? [{ label: '입력', value: tokens(usage.inputTokens) }, { label: '출력', value: tokens(usage.outputTokens) }] : [{ label: '사용량', value: UNKNOWN }]),
+    ...(share === null ? [] : [{ label: '캐시', value: `${share}%` }]),
+    ...(receipt.cost === 'pending' ? [{ label: '비용', value: cost('pending') }] : []),
+    { value: seconds(receipt.totalMs) },
   ];
-  return { lead: receipt.cost === null || receipt.cost === 'pending' ? null : cost(receipt.cost), line: line.join(' · ') };
+  return { lead: receipt.cost === null || receipt.cost === 'pending' ? null : cost(receipt.cost), parts };
 }
 
 export function usageFacts(receipt: Receipt) {

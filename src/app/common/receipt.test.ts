@@ -7,9 +7,13 @@ const receipt = { usage, cost: { unit: 'usd', amount: 0.0123, source: 'price-lis
 
 describe('사용량 표시', () => {
   it('leads the line with the cost, leaving out a cache or a cost the provider does not report', () => {
-    expect(usageLine(receipt)).toEqual({ lead: '약 $0.0123', line: '입력 12,000 · 출력 678 · 캐시 92% · 8.2초' });
-    expect(usageLine({ ...receipt, usage: null, cost: 'pending' })).toEqual({ lead: null, line: '사용량 알 수 없음 · 비용 확인하는 중… · 8.2초' });
-    expect(usageLine({ ...receipt, cost: null }).lead).toBeNull();
+    const read = (made: Receipt) => {
+      const { lead, parts } = usageLine(made);
+      return [lead, parts.map(({ label, value }) => (label ? `${label} ${value}` : value)).join(' · ')];
+    };
+    expect(read(receipt)).toEqual(['약 $0.0123', '입력 12,000 · 출력 678 · 캐시 92% · 8.2초']);
+    expect(read({ ...receipt, usage: null, cost: 'pending' })).toEqual([null, '사용량 알 수 없음 · 비용 확인하는 중… · 8.2초']);
+    expect(read({ ...receipt, cost: null })[0]).toBeNull();
   });
 
   it('opens on the facts, an unreported cache and reasoning read as unknown and an unknown cost left out', () => {

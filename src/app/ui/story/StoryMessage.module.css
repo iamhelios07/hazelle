@@ -325,6 +325,10 @@
   font-weight: var(--weight-semibold);
 }
 
+.usageValue {
+  color: var(--color-text);
+}
+
 .usageFacts {
   display: flex;
   flex-direction: column;
