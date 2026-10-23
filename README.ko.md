@@ -85,6 +85,8 @@ Node.js 24 이상이 깔린 리눅스나 macOS에서도 같은 명령어로 설�
 | LM Studio | `http://localhost:1234/v1` | `http://host.docker.internal:1234/v1` |
 | koboldcpp | `http://localhost:5001/v1` | `http://host.docker.internal:5001/v1` |
 
+다른 포트의 모델 서버를 쓰려면, 윈도우에서는 `start-hazelle.bat`의 `node\node.exe` 줄 위에 `set HAZELLE_LOCAL_PROVIDERS=localhost:11434,localhost:1234,localhost:5001,localhost:8000`처럼 전부 적어 넣어요. 도커는 [README](README.md#local-models)를 봐요.
+
 도커에서는 모델 서버가 같은 컴퓨터의 다른 프로그램에서 오는 접속도 받아야 해요. Ollama는 `OLLAMA_HOST=0.0.0.0`으로 실행하고, LM Studio는 로컬 네트워크에서 서비스하는 스위치를 켜요.
 
 ## 폰이나 다른 기기에서 쓰기

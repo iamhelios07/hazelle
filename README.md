@@ -92,7 +92,7 @@ The first account created on a fresh installation is the operator, and signup th
 
 ### Without Docker
 
-Each release also carries the image's app outside the image, run by Node instead of a container. It listens on 127.0.0.1:8080 (`PORT` changes the port), keeps its data in a `data` folder beside the app, and allows Ollama, LM Studio and koboldcpp at `localhost` (11434, 1234, 5001).
+Each release also carries the image's app outside the image, run by Node instead of a container. It listens on 127.0.0.1:8080 (`PORT` changes the port), keeps its data in a `data` folder beside the app, and allows Ollama, LM Studio and koboldcpp at `localhost` (11434, 1234, 5001); a `HAZELLE_LOCAL_PROVIDERS` set before the start replaces that list.
 
 - **Windows:** unzip `hazelle-windows-x64.zip`, which bundles Node, and run `start-hazelle.bat`. To update, unzip the new release elsewhere and move the `data` folder into it.
 - **Termux, Linux, macOS:** `curl -fsSL https://github.com/jiniill/hazelle/releases/latest/download/install.sh | sh` installs into `~/hazelle` with Node 24 or newer (Termux installs it) and starts it; `sh ~/hazelle/start` starts it later. Run the installer again to update, with Hazelle stopped.

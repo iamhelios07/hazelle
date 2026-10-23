@@ -7,14 +7,16 @@ import { join } from 'node:path';
 const app = join(import.meta.dirname, '..', '..');
 const port = process.env.PORT || '8080';
 const url = `http://localhost:${port}`;
-Object.assign(process.env, {
+// Defaults: a value the operator sets before the start, as README.ko.md shows for PORT, wins.
+const defaults = {
   NODE_ENV: 'production',
   HAZELLE_DATA: join(app, '..', 'data'),
   HAZELLE_CLIENT: join(app, 'dist', 'client'),
   HAZELLE_HOST: '127.0.0.1',
   // Ollama, LM Studio and koboldcpp, as in docker-compose.yml, but at localhost: no container stands in between.
   HAZELLE_LOCAL_PROVIDERS: 'localhost:11434,localhost:1234,localhost:5001',
-});
+};
+for (const [name, value] of Object.entries(defaults)) process.env[name] ??= value;
 
 const [command, args] = ({ win32: ['cmd', ['/c', 'start', '', url]], android: ['termux-open-url', [url]], darwin: ['open', [url]] } as const)[
   process.platform as 'win32' | 'android' | 'darwin'
