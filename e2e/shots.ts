@@ -1,9 +1,9 @@
-import { expect, type Page } from '@playwright/test';
-import { CARD, pickBot, signInFromGuest, signUpAsGuest } from './helpers';
+import type { Page } from '@playwright/test';
+import { CARD, enter, pickBot } from './helpers';
 
 // The screenshot account on the local dev server (playwright.shots.config.ts), kept across runs so a screenshot
-// script signs in instead of signing up. On a .data/ with no account the first run makes it, with the test card; as the
-// first signup it is the installation's operator.
+// script signs in instead of setting up. On a .data/ with no account the first run sets the installation up, with the
+// test card; that account is named owner, and the username here is the one .data/ already holds.
 export const SHOTS = { username: 'shots', password: 'shots-password' };
 
 // The layouts worth showing: a side panel sits beside the page from 1280px, covers it below, and the phone layout
@@ -26,13 +26,7 @@ export async function snap(page: Page, name: string) {
 }
 
 export async function enterShots(page: Page) {
-  await page.goto('/');
-  const signup = page.getByRole('button', { name: '계정 만들기', exact: true });
-  const full = page.getByText('지금은 정원이 차서 계정을 만들 수 없어요', { exact: true });
-  await expect(signup.or(full)).toBeVisible();
-  // 계정 만들기 is open only while signup is, which with the default cap of one is until the first account exists.
-  if (await full.isVisible()) return signInFromGuest(page, SHOTS.username, SHOTS.password);
-  await signUpAsGuest(page, SHOTS.username, SHOTS.password);
+  if (!(await enter(page, SHOTS.password))) return;
   const chooser = page.waitForEvent('filechooser');
   await pickBot(page);
   await page.getByRole('button', { name: '확인했어요', exact: true }).click();

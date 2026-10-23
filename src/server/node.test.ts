@@ -260,7 +260,7 @@ describe('the server process', () => {
     const server = start(data, port);
     await server.listening;
     expect(await (await fetch(`http://127.0.0.1:${port}/api/health`)).json()).toEqual({ ok: true, liveCalls: 0, backupAgeHours: null, diskFreePercent: expect.any(Number) });
-    expect(await (await fetch(`http://127.0.0.1:${port}/api/session`)).json()).toEqual({ session: null, signupOpen: true });
+    expect(await (await fetch(`http://127.0.0.1:${port}/api/session`)).json()).toEqual({ session: null, door: { kind: 'setup' } });
     const unknown = await fetch(`http://127.0.0.1:${port}/api/nowhere`, { headers: { accept: 'text/html' } });
     expect([unknown.status, unknown.headers.get('content-security-policy')]).toEqual([404, null]);
     const page = await fetch(`http://127.0.0.1:${port}/models/c1/vendor/model-4.5`, { headers: { accept: 'text/html' } });

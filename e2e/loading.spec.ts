@@ -10,7 +10,7 @@ test('session loading and retry stay visible without downloading the workspace',
   await page.route('**/api/session', async (route) => {
     const attempt = ++attempts;
     await new Promise<void>((resolve) => { respond = resolve; });
-    await route.fulfill({ status: attempt === 1 ? 500 : 200, json: attempt === 1 ? { error: 'server-error' } : { session: null, signupOpen: false } });
+    await route.fulfill({ status: attempt === 1 ? 500 : 200, json: attempt === 1 ? { error: 'server-error' } : { session: null, door: { kind: 'full' } } });
   });
 
   // A browser that opened an account before, whose session lapsed: it asks for that login rather than opening a guest.

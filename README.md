@@ -88,7 +88,7 @@ Open http://localhost:8080. The app listens on 127.0.0.1 only. The image is `ghc
 
 `install-docker.sh` (macOS, Linux) and `install-docker.ps1` (Windows) in each release do the same in `~/hazelle-docker`, wait for the app and open it; run again, they update.
 
-The first account created on a fresh installation is the operator, and signup then closes. To let others in, raise the signup limit on the admin screen. The operator account cannot be deleted while it is the only operator.
+A fresh installation admits one account, which makes it one person's: the first visit sets a password, the account it makes is the operator, and every later sign-in asks for that password alone, with no username and no guest. To let others in, raise the signup limit on the admin screen; the guest home, signup and usernames come back. The operator account cannot be deleted while it is the only operator.
 
 ### 헤이젤 나우
 

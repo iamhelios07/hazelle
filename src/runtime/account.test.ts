@@ -13,7 +13,7 @@ it('deletes the account only with its password proof, after which the session is
   await server.account('other');
   expect(await deleteAccount({ method: 'recovery', proof: server.passwordProof.proof })).toEqual({ ok: false, error: 'wrong-login' });
   expect(await deleteAccount(server.passwordProof)).toEqual({ ok: true, data: undefined });
-  expect(await loadSession()).toEqual({ ok: true, data: { session: null, signupOpen: true } });
+  expect(await loadSession()).toEqual({ ok: true, data: { session: null, door: { kind: 'open' } } });
 });
 
 it('holds a restore under way from the session or a 503, until the store answers with its bytes', async () => {

@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { Hono, type Context } from 'hono';
+import type { Door } from '../contracts/accounts';
 import type { RestoreAction } from '../contracts/admin';
 import { CAP } from './caps';
 import { checkProof, findAccount, hashProof, outsideVisitor, readMethod, readProof } from './credentials';
@@ -98,11 +99,21 @@ accounts.post('/logout/others', requireSession, async (c) => {
   return c.json({ ended: meta.changes });
 });
 
+// The door only tells the first screen which form to show; the signup insert decides. solo names the one account, since
+// that installation's sign-in asks for no username.
+async function door(c: Context<AppEnv>): Promise<Door> {
+  const { cap, accounts, username } = (await c.env.db
+    .prepare('SELECT signup_cap AS cap, (SELECT COUNT(*) FROM accounts) AS accounts, (SELECT username FROM accounts LIMIT 1) AS username FROM service')
+    .first<{ cap: number; accounts: number; username: string | null }>())!;
+  if (cap === 1 && accounts === 0) return { kind: 'setup' };
+  if (cap === 1 && accounts === 1) return { kind: 'solo', username: username! };
+  return { kind: accounts < cap ? 'open' : 'full' };
+}
+
 // Everything a page load needs, in one request: from Korea each round trip can take seconds.
-// signupOpen only tells the first screen which form to show. The signup insert decides.
 accounts.get('/session', async (c) => {
   const account = await currentAccount(c);
-  if (!account) return c.json({ session: null, signupOpen: Boolean(await c.env.db.prepare(`SELECT ${ROOM} AS open`).first('open')) });
+  if (!account) return c.json({ session: null, door: await door(c) });
   // For 헤이젤 나우's page-load mark (worker.ts), which counts the signed-in account.
   c.set('account', account);
   const [session, vault] = await Promise.all([describe(c, account), readVault(c.env.db, account.id)]);

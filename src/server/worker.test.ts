@@ -28,8 +28,8 @@ const operator = async () => {
 };
 
 describe('accounts', () => {
-  it('signs up the first account as the operator with its vault in one request, then closes signup', async () => {
-    expect(await (await get('session')).json()).toEqual({ session: null, signupOpen: true });
+  it('signs up the first account as the operator with its vault in one request, then closes signup to that one person', async () => {
+    expect(await (await get('session')).json()).toEqual({ session: null, door: { kind: 'setup' } });
     const body = signupBody();
     const signup = await post('signup', body);
     expect(signup.status).toBe(201);
@@ -47,7 +47,7 @@ describe('accounts', () => {
       vault: { passwordWrap: body.passwordWrap, recoveryWrap: body.recoveryWrap },
     });
 
-    expect(await (await get('session')).json()).toEqual({ session: null, signupOpen: false });
+    expect(await (await get('session')).json()).toEqual({ session: null, door: { kind: 'solo', username: 'jin' } });
     const second = await post('signup', signupBody('other'));
     expect(second.status).toBe(403);
     expect(await second.json()).toEqual({ error: 'signup-closed' });
@@ -63,7 +63,7 @@ describe('accounts', () => {
   it('admits accounts up to the cap the operator stored, and tells a taken username from a closed signup', async () => {
     await t.env.db.prepare('UPDATE service SET signup_cap = 2').run();
     await post('signup', signupBody());
-    expect(await (await get('session')).json()).toEqual({ session: null, signupOpen: true });
+    expect(await (await get('session')).json()).toEqual({ session: null, door: { kind: 'open' } });
     const taken = await post('signup', signupBody());
     expect(taken.status).toBe(409);
     expect(await taken.json()).toEqual({ error: 'username-taken' });
@@ -87,7 +87,7 @@ describe('accounts', () => {
       expect(await (await post('signup', signupBody(username))).json()).toEqual({ error: 'bad-username' });
     }
     expect((await post('signup', { ...signupBody(), passwordProof: 'short' })).status).toBe(400);
-    expect(await (await get('session')).json()).toEqual({ session: null, signupOpen: true });
+    expect(await (await get('session')).json()).toEqual({ session: null, door: { kind: 'setup' } });
   });
 
   it('logs in with the password proof or the recovery proof and answers with the vault', async () => {
@@ -158,7 +158,7 @@ describe('accounts', () => {
     const logout = await post('logout', undefined, cookie);
     expect(logout.status).toBe(204);
     expect(logout.headers.get('set-cookie')).toMatch(/^__Host-session=;.*Max-Age=0/);
-    expect(await (await get('session', cookie)).json()).toEqual({ session: null, signupOpen: false });
+    expect(await (await get('session', cookie)).json()).toEqual({ session: null, door: { kind: 'solo', username: 'jin' } });
   });
 
   it('logs out every other device and keeps this one', async () => {
@@ -197,7 +197,7 @@ describe('accounts', () => {
     // A deletion cut off after its intent.
     await t.env.db.prepare("UPDATE accounts SET state = 'leaving' WHERE id = ?").bind(body.accountId).run();
 
-    expect(await (await get('session', cookie)).json()).toEqual({ session: null, signupOpen: false });
+    expect(await (await get('session', cookie)).json()).toEqual({ session: null, door: { kind: 'full' } });
     for (const response of [await get('objects?since=0', cookie), await get('vault', cookie), await t.batch([], cookie)]) {
       expect(response.status).toBe(401);
       expect(await response.json()).toEqual({ error: 'no-session' });
@@ -234,7 +234,7 @@ describe('accounts', () => {
   it('ends a session once its expiry passes', async () => {
     const cookie = sessionCookie(await post('signup', signupBody()));
     await t.env.db.prepare('UPDATE sessions SET expires_at = ?').bind(Date.now() - 1).run();
-    expect(await (await get('session', cookie)).json()).toEqual({ session: null, signupOpen: false });
+    expect(await (await get('session', cookie)).json()).toEqual({ session: null, door: { kind: 'solo', username: 'jin' } });
   });
 });
 

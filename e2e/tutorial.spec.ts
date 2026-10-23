@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { ChildProcess } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { FAKE_ADDRESS, FAKE_MODEL, fakeProvider, signUpAsGuest, startServer, stopServer } from './helpers';
+import { FAKE_ADDRESS, FAKE_MODEL, fakeProvider, setUp, startServer, stopServer } from './helpers';
 
 // Each step finds its control by the screen's GuideMark: a mark lost in a screen's rewrite leaves the note docked with
 // 이어 하기. A server of its own, since the suite's one account has had a reply, and a reply stops offering the tutorial.
@@ -18,7 +18,7 @@ test.afterAll(() => stopServer(server));
 test('the tutorial points at each control in turn and ends on the chat screen', async ({ page }) => {
   await fakeProvider();
   await page.goto('/');
-  await signUpAsGuest(page, 'tutorial', 'correct horse battery');
+  await setUp(page, 'correct horse battery');
   const pointing = async (label: string, step: string) => {
     const note = page.getByRole('note', { name: label });
     await expect(note).toContainText(step);

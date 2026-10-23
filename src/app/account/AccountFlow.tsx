@@ -23,11 +23,12 @@ type State =
   | { kind: 'unreachable'; message: string }
   | { kind: 'guest'; accountId: string; vaultKey: VaultKey; signupOpen: boolean; facts: AccountFacts }
   // draft: kept until the upload lands, so going back, or a failed upload, keeps the same recovery key.
-  | { kind: 'signup'; step: 'password'; draft: GuestSignup | null }
-  | { kind: 'signup'; step: 'recovery'; draft: GuestSignup; failure: string | null }
+  // setup: the one account of a one-person installation (Door), which takes no username and has no guest to go back to.
+  | { kind: 'signup'; step: 'password'; draft: GuestSignup | null; setup: boolean }
+  | { kind: 'signup'; step: 'recovery'; draft: GuestSignup; failure: string | null; setup: boolean }
   | { kind: 'moving'; moved: Moved }
   | { kind: 'guest-data'; session: SessionFacts; vaultKey: VaultKey; failure: string | null }
-  | { kind: 'login'; notice: string | null; username: string }
+  | { kind: 'login'; notice: string | null; username: string; solo: boolean }
   | { kind: 'locked'; signedIn: SignedIn; notice: string | null }
   | { kind: 'recovered'; session: SessionFacts; vaultKey: VaultKey; current: Credential }
   | { kind: 'unlocked'; session: SessionFacts; vaultKey: VaultKey; facts: AccountFacts };
@@ -39,6 +40,9 @@ export type Unlocked = Account & { accountId: string; username: string; vaultKey
 
 const ELSEWHERE = '다른 탭에서 다른 계정으로 로그인해서 로그아웃됐어요.';
 const GUEST_NAME = '손님';
+// The username setup gives the one account. A solo sign-in never asks for it, but it names the first persona
+// (addFirstPersona), so the model reads it as {{user}}: a word like RisuAI's "User", never a placeholder like owner.
+const OWNER = '사용자';
 
 // Who this browser opens as with no session: the username of the account it last opened, so a lapsed session asks for
 // its login instead of showing an empty guest home that reads as lost data, or '' once 손님으로 쓰기 was picked. Never
@@ -71,9 +75,16 @@ async function loadState(notice: string | null = null, prefer: 'auto' | 'guest' 
   if (!result.ok) return { kind: 'unreachable', message: describeFailure(result) };
   const boot = result.data;
   if (boot.session === null) {
+    const { door } = boot;
+    if (door.kind === 'setup') {
+      // The signup is a guest's (prepareGuestSignup), so this browser's guest must exist first.
+      await guestAccount();
+      return { kind: 'signup', step: 'password', draft: null, setup: true };
+    }
+    if (door.kind === 'solo') return { kind: 'login', notice, username: door.username, solo: true };
     const known = prefer === 'auto' ? await entry() : null;
-    if (prefer === 'login' || notice !== null || known !== null) return { kind: 'login', notice, username: known ?? '' };
-    return { kind: 'guest', ...(await guestAccount()), signupOpen: boot.signupOpen, facts: guestFacts() };
+    if (prefer === 'login' || notice !== null || known !== null) return { kind: 'login', notice, username: known ?? '', solo: false };
+    return { kind: 'guest', ...(await guestAccount()), signupOpen: door.kind === 'open', facts: guestFacts() };
   }
   const vaultKey = await recallVault(boot.session.accountId);
   if (vaultKey) return { kind: 'landing', session: boot.session, vaultKey };
@@ -177,11 +188,12 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
         facts: state.facts,
         guest: {
           signupOpen: state.signupOpen,
-          onSignup: () => show({ kind: 'signup', step: 'password', draft: null }),
-          onSignIn: () => show({ kind: 'login', notice: null, username: '' }),
+          onSignup: () => show({ kind: 'signup', step: 'password', draft: null, setup: false }),
+          onSignIn: () => show({ kind: 'login', notice: null, username: '', solo: false }),
         },
       });
     case 'signup': {
+      const { setup } = state;
       if (state.step === 'recovery') {
         const { draft } = state;
         const title = '계정 만드는 중';
@@ -191,11 +203,11 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
             recoveryKey={draft.recoveryKey}
             saved={state.failure !== null}
             failure={state.failure}
-            onBack={() => show({ kind: 'signup', step: 'password', draft })}
+            onBack={() => show({ kind: 'signup', step: 'password', draft, setup })}
             onStart={async () => {
               show({ kind: 'moving', moved: { title, steps: {} } });
               const result = await signUpGuest(draft, { progress: moving(title) });
-              if (!result.ok) return show({ kind: 'signup', step: 'recovery', draft, failure: describeFailure(result) });
+              if (!result.ok) return show({ kind: 'signup', step: 'recovery', draft, failure: describeFailure(result), setup });
               await land(result.data, draft.vaultKey);
             }}
           />
@@ -204,14 +216,14 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
       const { draft } = state;
       return (
         <PasswordScreen
-          mode="signup"
+          mode={setup ? 'setup' : 'signup'}
           username={draft?.username ?? ''}
-          onBack={() => reload(null, 'guest')}
-          onSignIn={() => show({ kind: 'login', notice: null, username: '' })}
+          onBack={setup ? undefined : () => reload(null, 'guest')}
+          onSignIn={setup ? undefined : () => show({ kind: 'login', notice: null, username: '', solo: false })}
           onDone={async (typed, password) => {
-            const username = canonicalUsername(typed);
+            const username = setup ? OWNER : canonicalUsername(typed);
             const prepared = await prepareGuestSignup(username, await passwordCredential(username, password));
-            show({ kind: 'signup', step: 'recovery', draft: prepared, failure: null });
+            show({ kind: 'signup', step: 'recovery', draft: prepared, failure: null, setup });
             return null;
           }}
         />
@@ -244,11 +256,16 @@ export function AccountFlow({ children }: { children: (unlocked: Unlocked) => Re
         <SignInScreen
           account={null}
           username={state.username}
+          solo={state.solo}
           notice={state.notice}
-          onGuest={() => {
-            enterAs('');
-            reload(null, 'guest');
-          }}
+          onGuest={
+            state.solo
+              ? undefined
+              : () => {
+                  enterAs('');
+                  reload(null, 'guest');
+                }
+          }
           onSubmit={async (typed, method, secret) => {
             const username = canonicalUsername(typed);
             const credential = await credentialFor(username, method, secret);

@@ -10,9 +10,15 @@ import type { Unlocked } from './AccountFlow';
 const seen = vi.hoisted(() => ({
   failure: null as { message: string; onRetry: () => void } | null,
   choice: false,
+  password: null as { mode: string; onBack?: () => void; onSignIn?: () => void; onDone: (username: string, password: string) => Promise<string | null> } | null,
+  recovery: null as { username: string } | null,
+  signIn: null as { username?: string; solo?: boolean; onGuest?: () => void } | null,
 }));
 vi.mock('./UnreachableScreen', () => ({ UnreachableScreen: (props: NonNullable<typeof seen.failure>) => { seen.failure = props; return null; } }));
 vi.mock('./GuestDataScreen', () => ({ GuestDataScreen: () => { seen.choice = true; return null; } }));
+vi.mock('./PasswordScreen', () => ({ PasswordScreen: (props: NonNullable<typeof seen.password>) => { seen.password = props; return null; } }));
+vi.mock('./RecoveryKeyScreen', () => ({ RecoveryKeyScreen: (props: NonNullable<typeof seen.recovery>) => { seen.recovery = props; return null; } }));
+vi.mock('./SignInScreen', () => ({ SignInScreen: (props: NonNullable<typeof seen.signIn>) => { seen.signIn = props; return null; } }));
 vi.mock('../ui', async (original) => ({
   ...await original<typeof import('../ui')>(),
   Screen: ({ children }: { children: ReactNode }) => children,
@@ -37,6 +43,9 @@ beforeEach(() => {
   vi.stubGlobal('localStorage', { getItem: () => '', setItem: vi.fn() });
   seen.failure = null;
   seen.choice = false;
+  seen.password = null;
+  seen.recovery = null;
+  seen.signIn = null;
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -62,7 +71,7 @@ it.each([
     req.onsuccess = () => resolve(req.result);
   });
   const { loadSession } = await import('../../runtime/account');
-  vi.mocked(loadSession).mockResolvedValue({ ok: true, data: { session: null, signupOpen: true } });
+  vi.mocked(loadSession).mockResolvedValue({ ok: true, data: { session: null, door: { kind: 'open' } } });
   const { AccountFlow } = await import('./AccountFlow');
   const children = vi.fn<(account: Unlocked) => ReactNode>(() => null);
   const root = probeRoot();
@@ -98,7 +107,7 @@ it('shows the existing storage failure wording instead of staying on loading whe
 
 it('stops before remembering a guest vault when its head write fails, shows the failure, and retries', async () => {
   const { loadSession } = await import('../../runtime/account');
-  vi.mocked(loadSession).mockResolvedValue({ ok: true, data: { session: null, signupOpen: true } });
+  vi.mocked(loadSession).mockResolvedValue({ ok: true, data: { session: null, door: { kind: 'open' } } });
   const device = await import('../../vault/device');
   const remember = vi.spyOn(device, 'rememberVault');
   const put = IDBObjectStore.prototype.put;
@@ -157,5 +166,36 @@ it('stops landing when guest content cannot be read and asks the guest-data ques
   } finally {
     await act(() => root.unmount());
     remember.mockRestore();
+  }
+});
+
+it("asks a one-person installation's first visitor for a password alone, and names the account itself", async () => {
+  const { loadSession } = await import('../../runtime/account');
+  vi.mocked(loadSession).mockResolvedValue({ ok: true, data: { session: null, door: { kind: 'setup' } } });
+  const { AccountFlow } = await import('./AccountFlow');
+  const children = vi.fn(() => null);
+  const root = probeRoot();
+  try {
+    await act(() => root.render(<AccountFlow>{children}</AccountFlow>));
+    await waitFor(() => expect(seen.password).not.toBeNull());
+    expect(seen.password).toMatchObject({ mode: 'setup', onBack: undefined, onSignIn: undefined });
+    expect(children).not.toHaveBeenCalled();
+    await act(async () => { await seen.password!.onDone('', 'correct horse battery'); });
+    await waitFor(() => expect(seen.recovery).toMatchObject({ username: '사용자' }));
+  } finally {
+    await act(() => root.unmount());
+  }
+});
+
+it("signs in to a one-person installation's account by its password alone, with no guest to fall back to", async () => {
+  const { loadSession } = await import('../../runtime/account');
+  vi.mocked(loadSession).mockResolvedValue({ ok: true, data: { session: null, door: { kind: 'solo', username: 'jin' } } });
+  const { AccountFlow } = await import('./AccountFlow');
+  const root = probeRoot();
+  try {
+    await act(() => root.render(<AccountFlow>{() => null}</AccountFlow>));
+    await waitFor(() => expect(seen.signIn).toMatchObject({ username: 'jin', solo: true, onGuest: undefined }));
+  } finally {
+    await act(() => root.unmount());
   }
 });

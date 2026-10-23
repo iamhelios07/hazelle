@@ -10,8 +10,10 @@ import { Brand, Button, Callout, FileButton, IconButton, Intro, Screen, Stack, T
 type Props = {
   // The account whose vault is locked on this device, or null when signed out.
   account: string | null;
-  // Signed out: the username this browser last opened, or empty.
+  // Signed out: the username this browser last opened, or empty; solo: the one account of a one-person installation,
+  // whose username is not asked.
   username?: string;
+  solo?: boolean;
   notice?: string | null;
   // Signed out: the way back to this browser's guest, where 계정 만들기 is.
   onGuest?: () => void;
@@ -20,7 +22,7 @@ type Props = {
 };
 
 // Signing in and unlocking are the same act: the password (or the recovery key) opens the vault.
-export function SignInScreen({ account, username: known = '', notice, onGuest, onSubmit, onLogout }: Props) {
+export function SignInScreen({ account, username: known = '', solo = false, notice, onGuest, onSubmit, onLogout }: Props) {
   const [username, setUsername] = useState(known);
   const { busy, failure, run, setFailure } = useAttempt();
   const credential = useCredential(setFailure);
@@ -64,7 +66,7 @@ export function SignInScreen({ account, username: known = '', notice, onGuest, o
       </Intro>
       {notice && <Text variant="note">{notice}</Text>}
       <Stack>
-        {!account && <TextField label="아이디" kind="username" value={username} onChange={setUsername} />}
+        {!account && !solo && <TextField label="아이디" kind="username" value={username} onChange={setUsername} />}
         {recovery && (
           <FileButton accept=".txt,text/plain" icon={ACTS.import.icon} onFiles={([file]) => void file!.text().then(attempt)}>
             파일에서 {ACTS.import.label}

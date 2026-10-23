@@ -1,4 +1,5 @@
 import { ChangeSignal } from '../change-signal';
+import type { Door } from '../contracts/accounts';
 import type { AccountState } from '../contracts/admin';
 import { createVault, openVault, passwordCredential, recoveryCredential, type Credential, type Method, type VaultKey, type VaultRecord } from '../vault/keys';
 import { api, holdAccount, SLOW_ROUTE_WAIT, type ApiResult, type Heard } from './api';
@@ -11,7 +12,7 @@ import { transferGuest, type GuestTransferOptions } from './guest-transfer';
 export type Storage = { bytes: number | null; bytesCap: number | null; fileBytes: number; fileBytesCap: number | null };
 export type SessionFacts = { accountId: string; username: string; admin: boolean; suspended: boolean; state: Exclude<AccountState, 'leaving'>; storage: Storage; unreadNotices: number; unreadBoard: number; localProviders: readonly string[] };
 export type SignedIn = { session: SessionFacts; vault: VaultRecord };
-type Boot = { session: null; signupOpen: boolean } | SignedIn;
+type Boot = { session: null; door: Door } | SignedIn;
 export type Signup = { accountId: string; username: string; passwordProof: string; passwordWrap: string; recoveryProof: string; recoveryWrap: string };
 
 // null: a recovery key that is not one, so nothing was sent.

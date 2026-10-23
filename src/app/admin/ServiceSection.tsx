@@ -43,7 +43,7 @@ export function ServiceSection({ service, onSaved }: { service: Service; onSaved
       <SettingGroup label="서비스">
         <SettingRow
           label="가입 정원"
-          help="전체 계정 수가 정원보다 적을 때만 새로 가입할 수 있어요."
+          help="전체 계정 수가 정원보다 적을 때만 새로 가입할 수 있어요. 1명이면 혼자 쓰는 헤이젤이라 아이디 없이 비밀번호로만 로그인해요."
           sub={`지금 ${count(service.accounts)}명`}
           error={signupCap === undefined ? '0 이상의 정수를 입력해 주세요.' : undefined}
           control={<NumberInput label="가입 정원" unit="명" value={seats ?? String(service.signupCap)} invalid={signupCap === undefined} onChange={setSeats} />}
