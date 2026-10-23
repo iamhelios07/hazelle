@@ -22,7 +22,7 @@ import { DAY_MS, fail, type Services } from './http';
 import { RELAY_DAILY, relayBudget, tokenBucket, uploadBudget, visitorLimits } from './limits';
 import { localProviders, pinnedOutbound } from './outbound';
 import { refreshModelsDev } from './models-dev';
-import { forgetPulse, openPulse } from './pulse';
+import { forgetPulse, forwarded, openPulse } from './pulse';
 import { reconcile } from './reconcile';
 import { streamRegistry } from './stream-registry';
 import { streamStore } from './db/streams-db';
@@ -65,6 +65,17 @@ function proxiesFrom(name: string): BlockList {
   return trusted;
 }
 const port = wholeFrom('PORT', 8080, 1, 65535);
+// The board a self-host's counts also go to (pulse.ts forwarded): docker-compose.yml and launch.ts set hazelle.app; the
+// hosted machine and a development server set nothing, and forward nothing.
+let pulseBoard: URL | null = null;
+if (process.env.HAZELLE_PULSE_FORWARD) {
+  try {
+    pulseBoard = new URL(process.env.HAZELLE_PULSE_FORWARD);
+  } catch {
+    console.error(`hazelle: HAZELLE_PULSE_FORWARD must be an address: ${process.env.HAZELLE_PULSE_FORWARD}`);
+    process.exit(1);
+  }
+}
 // The non-Docker launcher (launch.ts) sets 127.0.0.1; blank listens on every interface.
 const host = process.env.HAZELLE_HOST || undefined;
 const trustedProxies = proxiesFrom('HAZELLE_TRUSTED_PROXIES');
@@ -134,7 +145,7 @@ const services: Services = {
   localProviders: local,
   limits,
   backups: backups(dataDir, snapshotHour, operatorAlerts),
-  pulse: openPulse(db),
+  pulse: pulseBoard ? forwarded(openPulse(db), pulseBoard, outbound) : openPulse(db),
 };
 
 // Work a request leaves running after its answer; the shutdown waits for it.

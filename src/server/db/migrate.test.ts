@@ -27,12 +27,29 @@ describe('the migration runner', () => {
       db.exec(`INSERT INTO accounts (id, username, login_hash, created_at, incarnation, timeline) VALUES ('a', 'existing', 'hash', 1, 'inc', 'timeline');
         INSERT INTO pulse_guest_seen (week, account) VALUES (1, 'a');
         INSERT INTO pulse_guest_replies (hour, key, type, account, name, replies) VALUES (0, '', 'direct', 'a', NULL, 1)`);
-      expect(migrate(db, 'migrations').applied).toEqual(['0021_visits.sql']);
+      expect(migrate(db, 'migrations').applied).toEqual(['0021_visits.sql', '0022_remote_pulse.sql']);
       expect(db.prepare('SELECT id, username FROM accounts').all()).toEqual([{ id: 'a', username: 'existing' }]);
       expect(db.prepare('SELECT * FROM pulse_guest_seen').all()).toEqual([{ week: 1, account: 'a' }]);
       expect(db.prepare('SELECT accounts, converted, guests FROM visit_days').all()).toEqual([{ accounts: 1, converted: 1, guests: 1 }]);
       expect(['visit_days', 'visit_keys', 'visit_hashes'].every((name) => tables(db).includes(name))).toBe(true);
       expect(migrate(db, 'migrations').applied).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it("keeps an existing installation's daily guests and leaves forwarded self-host replies out of them", () => {
+    const db = new DatabaseSync(':memory:');
+    try {
+      const earlier = readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0022_remote_pulse.sql').sort();
+      migrate(db, dir(Object.fromEntries(earlier.map((name) => [name, readFileSync(`migrations/${name}`, 'utf8')]))));
+      const reply = db.prepare("INSERT INTO pulse_guest_replies (hour, key, type, account, name, replies) VALUES (0, '', 'direct', ?, NULL, 1)");
+      reply.run('guest');
+      expect(migrate(db, 'migrations').applied).toEqual(['0022_remote_pulse.sql']);
+      reply.run('remote:self-host');
+      expect(db.prepare('SELECT guests FROM visit_days').all()).toEqual([{ guests: 1 }]);
+      reply.run('another');
+      expect(db.prepare('SELECT guests FROM visit_days').all()).toEqual([{ guests: 2 }]);
     } finally {
       db.close();
     }
@@ -269,7 +286,7 @@ it('adds guest authors and a persistent keyed address identity without changing 
   const db = new DatabaseSync(':memory:');
   migrate(db, dir(Object.fromEntries(readdirSync('migrations').filter((name) => name.endsWith('.sql') && name < '0020').map((name) => [name, readFileSync(join('migrations', name), 'utf8')]))));
   db.exec("INSERT INTO posts (title, text, category, visibility, created_at) VALUES ('이전 글', '본문', 'bug', 'public', 1); INSERT INTO comments (post_id, text, created_at) VALUES (1, '이전 댓글', 2)");
-  expect(migrate(db, 'migrations').applied).toEqual(['0020_board_guests.sql', '0021_visits.sql']);
+  expect(migrate(db, 'migrations').applied).toEqual(['0020_board_guests.sql', '0021_visits.sql', '0022_remote_pulse.sql']);
   const settings = db.prepare('SELECT board_guests, board_guest_key FROM service').get();
   expect(settings).toEqual({ board_guests: 1, board_guest_key: expect.stringMatching(/^[a-f0-9]{64}$/) });
   migrate(db, 'migrations');

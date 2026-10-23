@@ -69,6 +69,10 @@ curl -fsSL https://github.com/jiniill/hazelle/releases/latest/download/install.s
 
 Node.js 24 이상이 깔린 리눅스나 macOS에서도 같은 명령어로 설치할 수 있어요.
 
+## 헤이젤 나우
+
+직접 설치한 헤이젤도 [헤이젤 나우](https://hazelle.app/now) 집계에 함께 더해져요. 보내는 건 역할, 연결 종류, 모델 이름뿐이고, 계정 대신 알아볼 수 없게 바꾼 값을 보내요. 빼고 싶으면 `설정 › 계정 › 앱 정보`에서 `헤이젤 나우 집계 참여`를 꺼요.
+
 ## 백업
 
 - 계정 하나: `설정 › 계정 › 백업`의 전체 백업이 계정의 모든 것을 zip 하나로 저장해요.

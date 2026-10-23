@@ -1,6 +1,8 @@
-import { Hono } from 'hono';
+import { createHash } from 'node:crypto';
+import { Hono, type Context } from 'hono';
 import { CONNECTOR_MODELS, MODELS_DEV_LISTS } from '../connectors/models-dev';
 import {
+  pulseHeader,
   readPulseHeader,
   PULSE_FLOORS,
   PULSE_ROLES,
@@ -15,10 +17,12 @@ import {
   type PulseRole,
   type PulseRow,
   type PulseWeek,
+  type GuestPulse,
 } from '../contracts/pulse';
 import { VISITOR_HEADER } from '../contracts/http';
 import type { Db } from './db/service-db';
 import { DAY_MS, fail, readObject, type AppEnv } from './http';
+import type { Upstream } from './relay';
 
 // 헤이젤 나우 (design §6.12): counts what the client labels (worker.ts, calls.ts, streams.ts) and answers the public board.
 // The current week and the last 48 hours are lists of who used what (pulse_seen, pulse_used, pulse_replies), counted
@@ -278,18 +282,43 @@ export async function forgetPulse(db: Db, now = Date.now()) {
   await db.batch(['pulse_hours', 'pulse_replies', 'pulse_guest_replies'].map((table) => db.prepare(`DELETE FROM ${table} WHERE hour < ?`).bind(hourOf(now) - HOURS_KEPT_MS)));
 }
 
+// A self-hosted installation's counts also go to hazelle.app's board (design §6.12, on by default since 2026-10-23), as
+// the pings a guest sends: the person is a hash of the account or guest id, which that board can link to nothing.
+export function forwarded(pulse: Pulse, board: URL, upstream: Upstream): Pulse {
+  const remote = new URL('api/pulse/remote', board);
+  return {
+    ...pulse,
+    call: async (account, label, guest) => {
+      await pulse.call(account, label, guest);
+      const hash = createHash('sha256').update(account).digest('hex');
+      const client = [hash.slice(0, 8), hash.slice(8, 12), hash.slice(12, 16), hash.slice(16, 20), hash.slice(20, 32)].join('-');
+      const body = JSON.stringify({ client, label: pulseHeader(label) } satisfies GuestPulse);
+      void upstream(remote, { method: 'POST', headers: new Headers({ 'content-type': 'application/json' }), body, redirect: 'manual', signal: AbortSignal.timeout(10_000) }).then(
+        (answer) => answer.body?.cancel(),
+        () => {},
+      );
+    },
+  };
+}
+
+// A self-host's forwarded person is kept apart from this server's own guests by its prefix: migration 0022 leaves it out
+// of the operator's daily 손님 응답, while the board counts it like a guest.
+const REMOTE = 'remote:';
+async function guestPing(c: Context<AppEnv>, prefix: '' | typeof REMOTE) {
+  if (!c.env.limits.visitors.pulse.limit(c.req.header(VISITOR_HEADER) ?? 'direct').success) return fail(c, 429, 'too-many-visits');
+  const body = await readObject(c);
+  const client = body?.client;
+  const label = typeof body?.label === 'string' ? readPulseHeader(body.label) : null;
+  if (typeof client !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(client) || label?.kind !== 'call') return fail(c, 400, 'bad-input');
+  await c.env.pulse.seen(prefix + client, true);
+  await c.env.pulse.call(prefix + client, label, true);
+  return c.body(null, 204);
+}
+
 const WEEK_CACHE_SECONDS = 24 * 60 * 60;
 export const pulse = new Hono<AppEnv>()
-  .post('/guest', async (c) => {
-    if (!c.env.limits.visitors.pulse.limit(c.req.header(VISITOR_HEADER) ?? 'direct').success) return fail(c, 429, 'too-many-visits');
-    const body = await readObject(c);
-    const client = body?.client;
-    const label = typeof body?.label === 'string' ? readPulseHeader(body.label) : null;
-    if (typeof client !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(client) || label?.kind !== 'call') return fail(c, 400, 'bad-input');
-    await c.env.pulse.seen(client, true);
-    await c.env.pulse.call(client, label, true);
-    return c.body(null, 204);
-  })
+  .post('/guest', (c) => guestPing(c, ''))
+  .post('/remote', (c) => guestPing(c, REMOTE))
   .get('/', async (c) => c.json(await c.env.pulse.answer(), 200, { 'cache-control': `public, max-age=${MEMO_MS / 1000}` }))
   .get('/weeks/:from', async (c) => {
     const found = await c.env.pulse.week(Number(c.req.param('from')));

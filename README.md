@@ -90,6 +90,10 @@ Open http://localhost:8080. The app listens on 127.0.0.1 only. The image is `ghc
 
 The first account created on a fresh installation is the operator, and signup then closes. To let others in, raise the signup limit on the admin screen. The operator account cannot be deleted while it is the only operator.
 
+### 헤이젤 나우
+
+A self-hosted installation counts its own 헤이젤 나우 and, by default, also sends each count to hazelle.app's board: the role, connection type and model id, with a hash of the account in place of its id. Each account turns it off with 헤이젤 나우 집계 참여 in 앱 정보, which stops both. To stop forwarding for the whole installation, remove `HAZELLE_PULSE_FORWARD` from `docker-compose.yml`.
+
 ### Without Docker
 
 Each release also carries the image's app outside the image, run by Node instead of a container. It listens on 127.0.0.1:8080 (`PORT` changes the port), keeps its data in a `data` folder beside the app, and allows Ollama, LM Studio and koboldcpp at `localhost` (11434, 1234, 5001); a `HAZELLE_LOCAL_PROVIDERS` set before the start replaces that list.

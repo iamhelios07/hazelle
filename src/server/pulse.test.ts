@@ -2,7 +2,7 @@ import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { PULSE_HEADER, VISITOR_HEADER } from '../contracts/http';
 import { pulseHeader, type PulseAnswer, type PulseRole } from '../contracts/pulse';
 import { tokenBucket } from './limits';
-import { forgetPulse } from './pulse';
+import { forgetPulse, forwarded, type Pulse } from './pulse';
 import { replyKey, testApp } from './testing';
 import { readVisits } from './visits';
 
@@ -334,4 +334,29 @@ it('validates guest pings and limits the visitor, not a freely replaced client i
   } finally {
     t.env.limits.visitors.pulse = previous;
   }
+});
+
+it("counts a self-host's forwarded ping as a guest of the board, never in the daily 손님 응답", async () => {
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(NOON);
+  try {
+    const client = crypto.randomUUID();
+    expect((await t.post('pulse/remote', { client, label: pulseHeader({ kind: 'call', role: 'chat', type: 'openai', model: 'model' }) })).status).toBe(204);
+    expect((await t.env.db.prepare('SELECT account FROM pulse_guest_replies').all<{ account: string }>()).results).toEqual([{ account: `remote:${client}` }]);
+    expect((await readVisits(t.env.db, NOON))[0]).toMatchObject({ guests: 0 });
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+it('forwards each counted call to the board with a hash of the person in place of its id', async () => {
+  const counted: string[] = [];
+  const sent: { url: string; body: unknown }[] = [];
+  const pulse = forwarded({ call: async (account: string) => { counted.push(account); } } as unknown as Pulse, new URL('https://hazelle.app'), async (url, init) => {
+    sent.push({ url: url.href, body: JSON.parse(init.body!) });
+    return new Response(null, { status: 204 });
+  });
+  await pulse.call('account-1', { kind: 'call', role: 'chat', type: 'openai', model: 'gpt' });
+  expect(counted).toEqual(['account-1']);
+  expect(sent).toEqual([{ url: 'https://hazelle.app/api/pulse/remote', body: { client: expect.stringMatching(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/), label: 'chat openai gpt' } }]);
+  expect(JSON.stringify(sent)).not.toContain('account-1');
 });
