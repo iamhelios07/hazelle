@@ -92,6 +92,8 @@ the account schema version, and every operation not done or not yet seen ending.
 after a day; a generation goes at 7 days, and sooner once copied off-site unless it is one of the two newest or the newest of its UTC
 day (every deploy captures one); then every pooled picture no remaining disk generation names. The remote (`deploy/rclone-backup.sh`) drops its own generations by the same rule, read from its listing alone.
 
+Two copiers keep it: deploy/rclone-backup.sh to an rclone remote, and on a self-host outside a container the backup folder the admin
+screen names (`src/server/backup/folder.ts`), which writes the same layout and is thinned by the same rule (`thinGenerations`).
 The copier's contract: it copies disk-pooled pictures and, for v4 R2 generations, every named archive from the `files` rclone remote
 to `<backup remote>/snapshots/<bucket>/<incarnation>/<id>.sqlite.gz`, then the generation, its manifest last, then `copied` on the remote
 and locally holding the UTC ISO-8601 time. An archive pool entry goes only when no remote manifest names it and the source store lacks it. A generation is complete when it has both `manifest.json` and `copied`; backup freshness is
@@ -99,7 +101,7 @@ measured from the newest complete one. A restore verifies every hash the manifes
 
 Freshness (`src/server/backup/freshness.ts`): `backupAgeHours` counts from the newest complete generation's capture (null when there
 is none), `diskFreePercent` is the lowest of the data directory and `files/`. Above 36 hours without one (counted from the
-installation's creation while there is none) or below 20 % free, the admin screen shows a banner and `HAZELLE_ALERT_WEBHOOK` gets a
+installation's creation while there is none, and only where a copier is expected: hazelle.app, or a self-host with a backup folder set) or below 20 % free, the admin screen shows a banner and `HAZELLE_ALERT_WEBHOOK` gets a
 Discord/Slack-style `{ content, text }` POST, as it does for a failed run of the day; each condition at most once a UTC day
 (`src/server/alerts.ts`, which also sends server-slow; `alerts_sent`, written only after the POST succeeded). Every run of the job and every generation is a `backup_runs` row.
 
