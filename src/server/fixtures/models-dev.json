@@ -186,6 +186,22 @@
    },
    "says-nothing": {
     "id": "says-nothing"
+   },
+   "embed-text": {
+    "id": "embed-text",
+    "type": "embedding",
+    "modalities": {
+     "input": [
+      "text"
+     ],
+     "output": [
+      "text"
+     ]
+    },
+    "cost": {
+     "input": 0.15,
+     "output": 0
+    }
    }
   }
  },

@@ -50,7 +50,7 @@ function listedRows(payload: unknown): ListedRow[] | null {
     for (const [model, raw] of Object.entries(provider.models)) {
       if (!isRecord(raw)) continue;
       const modalities = isRecord(raw.modalities) ? raw.modalities : {};
-      const row = { list, model, name: typeof raw.name === 'string' && raw.name ? raw.name : null, price: ratesOf(raw.cost), input: modalitiesOf(modalities.input), output: modalitiesOf(modalities.output) };
+      const row = { list, model, name: typeof raw.name === 'string' && raw.name ? raw.name : null, price: ratesOf(raw.cost), input: modalitiesOf(modalities.input), output: raw.type === 'embedding' ? ['embedding' as const] : modalitiesOf(modalities.output) };
       if (row.price || row.input || row.output) rows.push(row);
     }
   }

@@ -32,6 +32,7 @@ it('stores the listed providers models.dev prices and inputs and outputs, pricin
   expect((await read('groq')).models).toEqual({
     'whisper-large-v3': { price: null, input: ['audio'], output: ['text'] },
     'priced-only': { price: { input: 1, output: 2, cacheRead: null, cacheWrite: null, tiers: [] }, input: null, output: null },
+    'embed-text': { price: { input: 0.15, output: 0, cacheRead: null, cacheWrite: null, tiers: [] }, input: ['text'], output: ['embedding'] },
   });
   expect((await t.get('models-dev?provider=poe', cookie)).status).toBe(400);
   expect(await t.env.db.prepare("SELECT name FROM models_dev WHERE list = 'github-copilot' AND model = 'gpt-5.4'").first('name')).toBe('GPT-5.4');

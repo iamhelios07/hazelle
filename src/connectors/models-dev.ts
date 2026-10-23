@@ -42,7 +42,8 @@ export const CONNECTOR_MODELS = {
 
 // models.dev's words for what a model takes and gives, as the app's Modality names them; any other word is dropped.
 export const MODELS_DEV_MODALITIES = { text: 'text', image: 'image', audio: 'audio', video: 'video', pdf: 'file' } as const;
-export type ListedModality = (typeof MODELS_DEV_MODALITIES)[keyof typeof MODELS_DEV_MODALITIES];
+// 'embedding' comes from a model's type: models.dev writes an embedding model's output as text.
+export type ListedModality = (typeof MODELS_DEV_MODALITIES)[keyof typeof MODELS_DEV_MODALITIES] | 'embedding';
 
 // A tier's rates replace the base ones once the request's input tokens exceed above. Tiers ascend by above.
 export type PriceTier = { above: number; input: number; output: number; cacheRead: number | null; cacheWrite: number | null };
