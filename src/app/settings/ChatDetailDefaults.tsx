@@ -13,7 +13,7 @@ import { useAutosave } from '../common/useAutosave';
 import { ANSWER_INSTRUCTION_LABEL, LORE_BUDGET_LABEL, MODEL_SETTINGS, RETRY_COUNT, RETRY_HELP } from '../common/words';
 import { useSettings, useStore } from '../session';
 import { useToast } from '../toast';
-import { Checkbox, NumberInput, SettingRow, Stack, Stepper, Switch, TextField } from '../ui';
+import { Checkbox, NumberInput, Row, SettingRow, Stepper, Switch, TextField } from '../ui';
 
 export function ChatDetailDefaults() {
   const store = useStore();
@@ -93,11 +93,11 @@ function UsageNoticesRows({ kinds, shown }: { kinds: UsageNoticeKind[] | undefin
           label="알릴 요청"
           wide
           control={
-            <Stack gap="related">
+            <Row kind="choices">
               {shown.map((kind) => (
                 <Checkbox key={kind} label={USAGE_NOTICE_NAMES[kind]} checked={kinds.includes(kind)} onChange={(on) => save(on ? [...kinds, kind] : kinds.filter((held) => held !== kind))} />
               ))}
-            </Stack>
+            </Row>
           }
         />
       )}

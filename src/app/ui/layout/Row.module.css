@@ -15,6 +15,11 @@
   gap: var(--space-8);
 }
 
+/* Checkboxes in a line: wider across than down, so a box stays clear of the label before it. */
+.choices {
+  gap: var(--space-8) var(--space-16);
+}
+
 /* One act standing alone under what it answers, such as a post's 추천. */
 .center {
   justify-content: center;
