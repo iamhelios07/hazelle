@@ -296,6 +296,16 @@
   fill: currentColor;
 }
 
+.pressable {
+  padding: 0;
+}
+
+@media (hover: hover) {
+  .pressable:hover {
+    color: var(--color-text);
+  }
+}
+
 .failure {
   display: flex;
   flex-direction: column;

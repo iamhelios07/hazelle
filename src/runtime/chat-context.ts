@@ -11,7 +11,7 @@ import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
 import type { Toggle, ToggleLine } from '../model/prompt';
 import { without } from '../model/fields';
-import { EMPTY_SETTINGS, SETTINGS_ID, type UsageNoticeKind } from '../model/settings';
+import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
 import { chatToggles, toggleValue } from '../model/toggles';
 import { chatModel, type Route } from './assignment';
 import { chatTranslate } from './features';
@@ -65,10 +65,10 @@ export const answerInstructionOf = (store: Reader['store']) => store.get('settin
 export const setAnswerInstruction = (store: ObjectStore, text: string) =>
   store.upsert('settings', (current = EMPTY_SETTINGS) => (text === ANSWER_INSTRUCTION ? without(current, 'answerInstruction') : { ...current, answerInstruction: text }));
 
-export const usageNoticesOf = (store: Reader['store']): UsageNoticeKind[] => store.get('settings', SETTINGS_ID)?.value.usageNotices ?? [];
+export const usageShownOf = (store: Reader['store']) => store.get('settings', SETTINGS_ID)?.value.usageShown ?? false;
 
-export const setUsageNotices = (store: ObjectStore, kinds: UsageNoticeKind[]) =>
-  store.upsert('settings', (current = EMPTY_SETTINGS) => (kinds.length ? { ...current, usageNotices: kinds } : without(current, 'usageNotices')));
+export const setUsageShown = (store: ObjectStore, shown: boolean) =>
+  store.upsert('settings', (current = EMPTY_SETTINGS) => (shown ? { ...current, usageShown: true } : without(current, 'usageShown')));
 
 // id is null for a chat not saved yet.
 export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messages: Message[]): ChatScope {

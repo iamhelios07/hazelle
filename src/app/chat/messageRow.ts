@@ -28,6 +28,8 @@ export function messageRow(chat: OpenChat, index: number) {
       last: index === chat.messages.length - 1,
       busy: chat.busy,
       branching: chat.branching,
+      // 사용량 표시: each reply's usage on a line under it.
+      usageShown: chat.usageShown,
     }, { message: Object.is, decor: sameFields }),
     translation: rowPart({
       translatingText: chat.translating.live.get(version) ?? null,

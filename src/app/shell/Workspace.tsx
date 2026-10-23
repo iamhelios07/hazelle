@@ -24,7 +24,6 @@ import { BotNotes } from './BotNotes';
 import { Layout } from './Layout';
 import { navigate } from './router';
 import type { Route } from './routes';
-import { UsageNotices } from './UsageNotices';
 
 const RECONNECTING: Standing = { message: '연결이 불안정해요', detail: '다시 연결되면 이어서 읽고 저장해요.' };
 const SUSPENDED: Standing = {
@@ -227,7 +226,6 @@ export function Workspace({ accountId, vaultKey, username, ...account }: Unlocke
           <TutorialProvider>
             <News />
             <BotNotes />
-            <UsageNotices />
             <ImportProvider>
               <Layout />
             </ImportProvider>

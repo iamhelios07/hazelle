@@ -12,6 +12,7 @@ import { BOOKMARK } from '../common/words';
 import { describeFailedReply, describeTranslateFailure } from '../common/failure';
 import { languageLabel } from '../common/languages';
 import { withParticle } from '../common/particles';
+import { usageLine } from '../common/receipt';
 import { timeOfDay } from '../common/time';
 import { agentsWaiting, DISCOUNT_STOPPING, DISCOUNT_WAITING, polishingNow, PRE_READ_RETRYING, PRE_READ_WAITING, RETRYING } from '../common/words';
 import type { Preparing } from '../../runtime/turn-steps';
@@ -45,7 +46,7 @@ const MARK = { length: 'length', 'no-terminal': 'length', stopped: 'stopped', re
 
 export const ChatMessage = memo(function ChatMessage(props: Props) {
   const { row, modelMenu, actions } = props;
-  const { message, text: original, decor, opening, last, busy, branching } = row.story.value;
+  const { message, text: original, decor, opening, last, busy, branching, usageShown } = row.story.value;
   const { translatingText, untranslated, canTranslate, awaited, flipped, showOriginal } = row.translation.value;
   const { placed, pictures, drawing, canIllustrate, pictureSizes } = row.illustration.value;
   const { remark, fresh } = row.mascot.value;
@@ -247,6 +248,9 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
                 : undefined
           }
         />
+      )}
+      {usageShown && receipt && !live && !failed && (
+        <Marker reason="usage" label={usageLine(receipt)} press={{ label: '응답 정보', onClick: () => actions.info(message.id) }} />
       )}
       {!wide && switcher}
     </>

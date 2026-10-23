@@ -13,7 +13,7 @@ import { badgesByVersion, toolActions, toolComposer } from './toolMenu';
 import { triggersOf } from '../../runtime/script-selection';
 import type { Shown } from '../../runtime/talk';
 import { blocked, isBlocked, type Target } from '../../runtime/turn-context';
-import { packsOf, togglesOf } from '../../runtime/chat-context';
+import { packsOf, togglesOf, usageShownOf } from '../../runtime/chat-context';
 import { polishAgain, takeTurn, type TurnFailure } from '../../runtime/turn';
 import { skippedStep, type Skip, type StepFailure } from '../../runtime/turn-steps';
 import { agentsOf } from '../../runtime/agents';
@@ -77,7 +77,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const card = shelf?.character.card ?? null;
   // Any trigger may answer a press: a Lua one by a function of the button's name, a block one by its own name.
   const scripted = triggersOf(packsOf(store, chat)).length > 0;
-  // Subscribed for featuresOf and chatTranslate, which read the settings and the chat's prompt from the store.
+  // Subscribed for featuresOf, chatTranslate and usageShownOf, which read the settings and the chat's prompt from the store.
   useSettings();
   useStored('prompt', prompt.kind === 'prompt' ? prompt.prompt.id : null);
   const features = featuresOf(store, chat);
@@ -392,6 +392,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     inspect: inspectShown(panels, pairs),
     tools,
     bookmarked,
+    usageShown: usageShownOf(store),
     dialog,
     modelMenu,
     castMenu,

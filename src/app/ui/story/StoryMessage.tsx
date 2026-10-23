@@ -1,4 +1,4 @@
-import { Ban, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ImageIcon, Languages, Scissors, Square, TriangleAlert, WandSparkles } from 'lucide-react';
+import { Ban, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ImageIcon, Languages, Receipt, Scissors, Square, TriangleAlert, WandSparkles } from 'lucide-react';
 import { createContext, useContext, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Button } from '../controls/Button';
 import { IconButton } from '../controls/IconButton';
@@ -165,10 +165,23 @@ export function Switcher({ count, prev, next, pick, axis = 'across' }: SwitcherP
   );
 }
 
-type MarkerProps = { reason: 'length' | 'stopped' | 'refused' | 'translation' | 'illustration' | 'agent'; label: string; action?: { label: string; disabled: boolean; onClick: () => void } };
-const MARKS = { length: Scissors, stopped: Square, refused: Ban, translation: Languages, illustration: ImageIcon, agent: WandSparkles };
+// press: the whole marker is the button, for words that are themselves what opens (a reply's usage opens its 응답 정보).
+type MarkerProps = {
+  reason: 'length' | 'stopped' | 'refused' | 'translation' | 'illustration' | 'agent' | 'usage';
+  label: string;
+  action?: { label: string; disabled: boolean; onClick: () => void };
+  press?: { label: string; onClick: () => void };
+};
+const MARKS = { length: Scissors, stopped: Square, refused: Ban, translation: Languages, illustration: ImageIcon, agent: WandSparkles, usage: Receipt };
 
-export function Marker({ reason, label, action }: MarkerProps) {
+export function Marker({ reason, label, action, press }: MarkerProps) {
+  if (press)
+    return (
+      <button type="button" className={`${styles.marker} ${styles.pressable}`} title={press.label} aria-label={`${label} · ${press.label}`} onClick={press.onClick}>
+        <Icon icon={MARKS[reason]} size="sm" />
+        <span>{label}</span>
+      </button>
+    );
   return (
     <div className={reason === 'stopped' ? `${styles.marker} ${styles.stopped}` : styles.marker}>
       <Icon icon={MARKS[reason]} size="sm" />

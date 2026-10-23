@@ -1,16 +1,30 @@
 import { useMemo, useState, useSyncExternalStore } from 'react';
-import type { LogEntry } from '../../runtime/request-log';
-import { callName } from '../common/calls';
+import type { CallPurpose, LogEntry } from '../../runtime/request-log';
 import { describeReplyError } from '../common/failure';
 import { finish, seconds, tokens } from '../common/receipt';
 import { ago } from '../common/time';
-import { UNKNOWN } from '../common/words';
+import { FEATURE_NAMES, ROLE_TAGS, SCRIPTS, STAGE_NAMES, TOOL, UNKNOWN } from '../common/words';
 import { useSession } from '../session';
 import { Button, Callout, Empty, List, ListItem, Section, Stack, Text } from '../ui';
 import { BROKEN, why } from './ChatCache';
 import { SentRequest, SentResponse } from './ChatSent';
 
 const PAGE = 20;
+
+const PURPOSES: Record<CallPurpose, string> = {
+  reply: '응답',
+  translation: FEATURE_NAMES.translate,
+  input: '입력 번역',
+  note: '번역가의 노트',
+  memory: FEATURE_NAMES.memory,
+  script: `${SCRIPTS.part}·${TOOL}`,
+  illustration: FEATURE_NAMES.illustrate,
+  likeness: '삽화 프로필',
+  mascot: FEATURE_NAMES.mascot,
+  preread: FEATURE_NAMES.preread,
+  agent: FEATURE_NAMES.agents,
+  embedding: ROLE_TAGS.embed,
+};
 
 export function Log({ chat }: { chat: string }) {
   const { log } = useSession();
@@ -56,7 +70,7 @@ function Row({ entry, open, onToggle }: { entry: LogEntry; open: boolean; onTogg
   const broken = receipt.forecast?.broken;
   return (
     <ListItem
-      title={callName(entry)}
+      title={entry.agent ? `${entry.agent.name} · ${STAGE_NAMES[entry.agent.stage]} ${PURPOSES.agent}` : PURPOSES[entry.purpose]}
       badge={counted && input > 0 ? `적중 ${Math.round((read / input) * 100)}%` : undefined}
       description={facts.join(' · ')}
       tags={used}

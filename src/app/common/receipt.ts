@@ -16,6 +16,11 @@ export function cost(value: Cost | 'pending' | null): string {
   return value.source === 'reported' ? amount : `약 ${amount}`;
 }
 
+export function usageLine({ usage, cost: spent }: Pick<Receipt, 'usage' | 'cost'>): string {
+  const used = usage ? `입력 ${tokens(usage.inputTokens)} · 출력 ${tokens(usage.outputTokens)}` : `사용량 ${UNKNOWN}`;
+  return `${used} · ${spent === null || spent === 'pending' ? `비용 ${cost(spent)}` : cost(spent)}`;
+}
+
 const CUT = { length: '길이 한도', stopped: '직접 중단', 'no-terminal': '중간에 끊김', refused: '제공자가 차단' } as const;
 
 export function finish(receipt: Receipt): { label: string; value: string; tone?: 'warn' } {
