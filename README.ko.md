@@ -8,7 +8,7 @@
 |---|---|---|---|
 | 미리 필요한 것 | 없음 | Docker Desktop | Termux 앱 |
 | 설치 | zip 풀고 더블클릭 | 명령어 한 줄 | 명령어 한 줄 |
-| 업데이트 | 새 폴더로 `data` 옮기기 | 같은 명령어 다시 | 같은 명령어 다시 |
+| 업데이트 | 켤 때마다 자동 | 같은 명령어 다시 | 같은 명령어 다시 |
 
 도커를 모르면 윈도우 방법으로 시작하세요.
 
@@ -23,16 +23,11 @@
 
 검은 창이 헤이젤이에요. 창을 닫으면 헤이젤도 꺼져요. 이미 켜져 있을 때 `start-hazelle.bat`을 다시 실행하면 브라우저만 열려요.
 
-데이터는 `hazelle\data` 폴더에 쌓여요. 8080 포트를 다른 프로그램이 쓰고 있으면 `start-hazelle.bat`을 메모장으로 열고 `node\node.exe`로 시작하는 줄 위에 `set PORT=8081`을 넣어요.
+데이터는 `hazelle\data` 폴더에 쌓여요. 8080 포트를 다른 프로그램이 쓰고 있으면 `start-hazelle.bat`을 메모장으로 열고 `cd`로 시작하는 줄 아래에 `set PORT=8081`을 넣어요.
 
 ### 업데이트
 
-1. 검은 창을 닫아 헤이젤을 꺼요.
-2. [새 zip](https://github.com/jiniill/hazelle/releases/latest/download/hazelle-windows-x64.zip)을 다른 곳에 풀어요.
-3. 원래 `hazelle` 폴더의 `data` 폴더를 새 `hazelle` 폴더로 옮겨요.
-4. 새 폴더의 `start-hazelle.bat`을 실행해요. 잘 열리면 원래 폴더는 지워도 돼요.
-
-새 버전이 나올 때 알림을 받으려면 [GitHub 저장소](https://github.com/jiniill/hazelle)에서 `Watch` → `Custom` → `Releases`를 켜요.
+`start-hazelle.bat`으로 켤 때마다 새 버전이 있는지 확인하고, 있으면 받은 다음 켜요. `data` 폴더와 `start-hazelle.bat`에 넣은 설정은 그대로 남아요. 인터넷이 안 되면 지금 버전으로 켜요.
 
 ## 도커
 
@@ -89,7 +84,7 @@ Node.js 24 이상이 깔린 리눅스나 macOS에서도 같은 명령어로 설�
 | LM Studio | `http://localhost:1234/v1` | `http://host.docker.internal:1234/v1` |
 | koboldcpp | `http://localhost:5001/v1` | `http://host.docker.internal:5001/v1` |
 
-다른 포트의 모델 서버를 쓰려면, 윈도우에서는 `start-hazelle.bat`의 `node\node.exe` 줄 위에 `set HAZELLE_LOCAL_PROVIDERS=localhost:11434,localhost:1234,localhost:5001,localhost:8000`처럼 전부 적어 넣어요. 도커는 [README](README.md#local-models)를 봐요.
+다른 포트의 모델 서버를 쓰려면, 윈도우에서는 `start-hazelle.bat`의 `cd` 줄 아래에 `set HAZELLE_LOCAL_PROVIDERS=localhost:11434,localhost:1234,localhost:5001,localhost:8000`처럼 전부 적어 넣어요. 도커는 [README](README.md#local-models)를 봐요.
 
 도커에서는 모델 서버가 같은 컴퓨터의 다른 프로그램에서 오는 접속도 받아야 해요. Ollama는 `OLLAMA_HOST=0.0.0.0`으로 실행하고, LM Studio는 로컬 네트워크에서 서비스하는 스위치를 켜요.
 
