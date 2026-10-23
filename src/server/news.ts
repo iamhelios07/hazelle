@@ -5,19 +5,12 @@ import type { DatabaseSync } from 'node:sqlite';
 // sets it to null for one that brings nothing to tell; once published, the post is the record and is edited on the board.
 export type ReleaseNews = { version: string; title: string; text: string };
 export const RELEASE_NEWS: ReleaseNews | null = {
-  version: 'v0.5.0',
-  title: '헤이젤을 내 컴퓨터나 폰에 설치할 수 있어요',
+  version: 'v0.5.1',
+  title: '응답 아래에서 사용량과 비용을 바로 볼 수 있어요',
   text: [
-    '- 윈도우는 zip을 풀고 더블클릭하면 켜져요. 도커는 필요 없어요. 새 버전이 나오면 켤 때 현재 버전과 최신 버전을 보여 주고 업데이트할지 물어봐요.',
-    '- 도커를 쓰면 명령어 한 줄로 설치하고, 같은 명령어로 업데이트해요. 안드로이드는 Termux에서 명령어 한 줄이면 돼요.',
-    '- 혼자 쓰려고 설치한 헤이젤은 처음 열 때 비밀번호만 정해요. 회원가입도 아이디도 없이 그 비밀번호로 열어요.',
-    '- 직접 설치한 헤이젤에는 용량 한도가 없어요. 게시판과 헤이젤 나우는 hazelle.app으로 이어져서, 새 소식과 질문은 여기 그대로 모여요.',
-    '- 운영 화면에서 백업 폴더를 정하면, 매일 만드는 백업을 USB나 OneDrive 같은 다른 곳에도 복사해요.',
-    '- Ollama, LM Studio, koboldcpp를 켜 두면 새 연결 화면에 바로 나와서, 한 번에 연결할 수 있어요.',
-    '- 직접 설치한 헤이젤도 헤이젤 나우 집계에 더해져요. 빼고 싶으면 설정 › 계정 › 앱 정보에서 끌 수 있어요.',
-    '- 넓은 화면에서는 답의 버전을 넘기는 버튼이 메시지 도구 줄에 있어요. 긴 답을 읽는 중에도 바로 넘길 수 있어요.',
-    '',
-    '설치 방법은 [설치 안내](https://github.com/jiniill/hazelle/blob/master/README.ko.md)에 있어요.',
+    '- 설정 › 채팅 › 세부 설정에서 사용량 표시를 켜면, 응답마다 아래에 비용, 입력·출력 토큰, 캐시 적중률, 걸린 시간이 한 줄로 나와요.',
+    '- 그 줄을 누르면 추론 토큰, 첫 토큰까지 걸린 시간, 속도, 모델까지 펼쳐져요. 자세히를 누르면 응답 정보가 열려요.',
+    '- 새 채팅에서도 첫 메시지를 보내기 전에 점검을 열 수 있어요. 첫 메시지가 어떤 프롬프트로 나갈지 미리 확인할 수 있어요.',
   ].join('\n'),
 };
 

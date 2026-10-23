@@ -46,7 +46,7 @@ export function ChatDetailDefaults() {
       <AnswerInstructionField changed={answerInstruction !== undefined} />
       <SettingRow
         label={USAGE_SHOWN}
-        help="응답 아래에 입력·출력 토큰과 비용을 한 줄로 보여 줘요. 누르면 응답 정보가 열려요."
+        help="응답 아래에 비용과 토큰을 한 줄로 보여 줘요. 누르면 자세한 내용이 펼쳐져요."
         changed={usageShown !== undefined}
         control={<Switch label={USAGE_SHOWN} checked={usageShown !== undefined} onChange={(on) => void setUsageShown(store, on).then((result) => result.ok || toast.failed(result))} />}
       />
