@@ -111,7 +111,10 @@ declare namespace Hazelle {
     // version is not the one shown.
     rendered(at: At | null): Promise<Rendered | null>;
   }
-  interface Storage {                           // tool data: synced, owned by the module
+  // Tool data: synced, owned by the module. A value is at most 4 MB of JSON and a tool's values 32 MB; one past 512 KB is
+  // kept as a file counted in the account's picture budget, read when asked. set throws too-large past either, or
+  // files-full when the picture budget is spent.
+  interface Storage {
     get<T extends Json = Json>(key: string): Promise<T | undefined>;
     set(key: string, value: Json): Promise<void>;
     delete(key: string): Promise<void>;

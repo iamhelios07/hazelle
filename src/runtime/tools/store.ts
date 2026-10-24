@@ -1,3 +1,4 @@
+import { CLAIM_SETTLE_MS } from '../../contracts/files';
 import type { Chat } from '../../model/chat';
 import type { ToolUnit } from '../../model/tool';
 import { packsOf } from '../chat-context';
@@ -26,6 +27,8 @@ export const TOOL_KEY_CHARS = 256;
 const TOOL_WRITES_PER_MINUTE = 30;
 export const TOOL_NOTICES_PER_MINUTE = 3;
 const WRITE_PAUSE_MS = 1000;
+// Past an upload's claim, so the sweep may release the file a write replaced.
+const SWEEP_AFTER_MS = CLAIM_SETTLE_MS + 60_000;
 const RATE_WINDOW_MS = 60_000;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder('utf-8', { fatal: true });
@@ -224,6 +227,9 @@ export class ToolStorage {
   private readonly queues = new Map<string, DataQueue>();
   // A file's value by its key, read once: a file is named by its sealed bytes, so a value written again names another.
   private readonly files = new Map<string, { id: string; read: Promise<ApiResult<Json | undefined>> }>();
+  // A replaced file stays counted until a sweep releases it, and a sweep walks the whole account, so a tool writing a big
+  // value every turn is swept at most once a claim's length, and once more for what that sweep could not yet release.
+  private sweep: { timer: ReturnType<typeof setTimeout>; again: boolean } | null = null;
   private closed = false;
   private readonly rate = new ToolRate(TOOL_WRITES_PER_MINUTE);
 
@@ -277,7 +283,22 @@ export class ToolStorage {
 
   close() {
     this.closed = true;
+    if (this.sweep) clearTimeout(this.sweep.timer);
+    this.sweep = null;
     for (const module of this.queues.keys()) this.cancel(module);
+  }
+
+  private sweepLater() {
+    if (this.closed) return;
+    if (this.sweep) { this.sweep.again = true; return; }
+    const sweep = this.sweep = {
+      again: false,
+      timer: setTimeout(() => {
+        this.sweep = null;
+        void this.session.files.sweep();
+        if (sweep.again) this.sweepLater();
+      }, SWEEP_AFTER_MS),
+    };
   }
 
   private schedule(module: string, queue: DataQueue) {
@@ -297,8 +318,10 @@ export class ToolStorage {
         try {
           if (this.closed) throw new Error('closed');
           this.take(module);
+          const before = fileOf(this.session.store, module, key)?.value.file.id;
           const result = value === undefined ? await deleteToolData(this.session.store, module, key) : await setToolData(this.session, module, key, value);
           if (!result.ok) throw new Error(result.error);
+          if (before !== undefined && fileOf(this.session.store, module, key)?.value.file.id !== before) this.sweepLater();
           for (const waiter of waiting) waiter.resolve();
         } catch (error) {
           for (const waiter of waiting) waiter.reject(error instanceof Error ? error : new Error(String(error)));

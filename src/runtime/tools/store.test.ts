@@ -5,7 +5,8 @@ import { setModuleDeleted } from '../modules';
 import { purgeNow } from '../removal';
 import { exportBackup, readBackup, restoreBackup } from '../testing/backup';
 import { testServer } from '../testing';
-import { deleteToolData, importTool, readToolAsset, saveToolAsset, saveToolChat, setToolData, setToolSettings, toolBadges, toolChatData, toolChatKeys, toolData, toolDataId, toolKeys, TOOL_CHAT_BYTES, TOOL_DATA_BYTES, TOOL_KEY_CHARS, TOOL_ROW_BYTES, TOOL_VALUE_BYTES, undoToolImport } from './store';
+import { deleteToolData, importTool, readToolAsset, saveToolAsset, saveToolChat, setToolData, setToolSettings, toolBadges, toolChatData, toolChatKeys, toolData, toolDataId, toolKeys, TOOL_CHAT_BYTES, TOOL_DATA_BYTES, TOOL_KEY_CHARS, TOOL_ROW_BYTES, TOOL_VALUE_BYTES, ToolStorage, undoToolImport } from './store';
+import { CLAIM_SETTLE_MS } from '../../contracts/files';
 import type { Files } from '../files';
 
 const server = testServer();
@@ -170,6 +171,37 @@ describe('tool storage', () => {
     await reopened.ready;
     expect(fresh.children('toolchat', chat)).toEqual([]);
     reopened.release();
+  });
+
+  it('sweeps once a claim has passed after a write replaces a value kept as a file, and the sweep releases the old file', async () => {
+    const { store, files } = await server.account();
+    const added = await importTool(store, files, source());
+    if (!added.ok) throw new Error(added.error);
+    const module = added.data.id;
+    const storage = new ToolStorage({ store, files });
+    const sweep = vi.spyOn(files, 'sweep').mockResolvedValue();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const big = storage.write(module, 'big', 'x'.repeat(TOOL_ROW_BYTES));
+      await vi.advanceTimersByTimeAsync(1001);
+      await big;
+      const old = store.list('toolfile')[0]!.value.file;
+      const small = storage.write(module, 'big', 'small');
+      await vi.advanceTimersByTimeAsync(1001);
+      await small;
+      await vi.advanceTimersByTimeAsync(CLAIM_SETTLE_MS);
+      expect(sweep).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(60_000);
+      expect(sweep).toHaveBeenCalledOnce();
+      sweep.mockRestore();
+      vi.useRealTimers();
+      const later = Date.now() + 2 * CLAIM_SETTLE_MS;
+      const clock = vi.spyOn(Date, 'now').mockImplementation(() => later);
+      try {
+        expect(await files.release()).toEqual({ ok: true, data: { released: 1, taken: 0 } });
+        expect(await files.read(old)).toEqual({ ok: false, error: 'not-found' });
+      } finally { clock.mockRestore(); }
+    } finally { vi.useRealTimers(); storage.close(); }
   });
 
   it('round trips tool code, settings, data and per-chat data through an account backup', async () => {
