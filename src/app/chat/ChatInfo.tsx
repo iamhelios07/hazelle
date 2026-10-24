@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { calls, handEdited, shown, type AgentRun, type Receipt, type Version } from '../../model/chat';
-import { cacheShortfall } from '../../runtime/cache-diagnosis';
 import { setAgentMemory } from '../../runtime/chat-log';
 import type { LogEntry } from '../../runtime/request-log';
 import { describeReplyError } from '../common/failure';
@@ -223,7 +222,6 @@ function AgentCall({ chat, version, run: { agent, name, stage, receipt, note, me
 
 function Call({ receipt, entry }: { receipt: Receipt; entry: LogEntry | null }) {
   const usage = receipt.usage;
-  const short = cacheShortfall(receipt);
   const cached = usage?.cachedInputTokens ?? null;
   const input = usage?.inputTokens ?? null;
   const fresh = input !== null && cached !== null ? input - cached : null;
@@ -265,7 +263,7 @@ function Call({ receipt, entry }: { receipt: Receipt; entry: LogEntry | null }) 
       ) : (
         <Empty variant="section">제공자가 사용량을 알려 주지 않았어요.</Empty>
       )}
-      {short?.short && <ShortfallNote shortfall={short} entry={entry} />}
+      <ShortfallNote receipt={receipt} entry={entry} />
       <Facts variant="tiles" items={[...(usage ? [] : [{ label: '토큰', value: UNKNOWN, tone: 'muted' as const }]), ...outcomeFacts(receipt)]} />
       <Fitting receipt={receipt} />
     </>

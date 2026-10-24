@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import type { CacheBreak, CacheForecast } from '../../model/cache';
+import { shortStreak } from '../../engine/cache-history';
+import type { CacheBreak, CacheForecast, CacheRecurrence } from '../../model/cache';
 import type { Route } from '../../runtime/assignment';
 import { modelProfile } from '../../runtime/profiles';
 import { tokens } from '../common/receipt';
 import { MODEL_SETTINGS } from '../common/words';
 import { useStore } from '../session';
 import { SendNote } from '../ui';
-import { firstCause, shortStreak } from './CacheDiagnosis';
+import { firstCause, SHORT } from './CacheDiagnosis';
 import { partName } from './ChatSent';
 import type { CacheNotes } from './useSendNotes';
 
@@ -44,7 +45,7 @@ export function profileName(store: Parameters<typeof modelProfile>[0], route: Ro
   return choice.kind === 'profile' ? choice.profile.value.name : null;
 }
 
-export const reads = ({ read, of }: CacheForecast) => (read > 0 ? `캐시된 ${tokens(of)} 토큰 중 약 ${tokens(read)} 토큰만 읽어요.` : '캐시를 읽지 못했어요.');
+const reads = ({ read, of }: CacheForecast) => (read > 0 ? `캐시된 ${tokens(of)} 토큰 중 약 ${tokens(read)} 토큰만 읽어요.` : '캐시를 읽지 못했어요.');
 
 const clock = (ms: number) => {
   const seconds = Math.ceil(ms / 1000);
@@ -68,12 +69,19 @@ export function useNow(until: number | null) {
   return now;
 }
 
+// What the next send is warned of, beside the send button and in 다음 전송 예상 alike: a forecast break first, else
+// a run of provider shortfalls on its connection.
+export function nextWarning(next: NonNullable<CacheNotes['next']>, recurrence: CacheRecurrence, profile: string | null): { words: string; why: string } | undefined {
+  const { against } = next.forecast;
+  if (against?.broken) return { words: BROKEN, why: [why(against.broken, profile), firstCause(next.diagnosis, against.broken), reads(against)].filter(Boolean).join(' ') };
+  const streak = shortStreak(recurrence, next.route.connection.id);
+  return streak === null ? undefined : { words: SHORT, why: `이 연결은 최근 ${streak}번 연속 예상보다 적게 읽었어요. 제공자가 캐시를 비우거나 요청을 바꾸는 것 같아요.` };
+}
+
 export function ChatCache({ cache, onOpen }: { cache: CacheNotes; onOpen: () => void }) {
   const store = useStore();
   const now = useNow(cache.until);
   if (cache.until === null || now >= cache.until) return null;
   const { next } = cache;
-  const against = next?.forecast.against;
-  const warning = next && against?.broken ? { words: BROKEN, why: [why(against.broken, profileName(store, next.route)), firstCause(next.diagnosis, against.broken), reads(against)].filter(Boolean).join(' ') } : next && shortStreak(cache.recurrence, next.route.connection.id);
-  return <SendNote label={clock(cache.until - now)} title={TITLE} warning={warning || undefined} onClick={onOpen} />;
+  return <SendNote label={clock(cache.until - now)} title={TITLE} warning={next ? nextWarning(next, cache.recurrence, profileName(store, next.route)) : undefined} onClick={onOpen} />;
 }

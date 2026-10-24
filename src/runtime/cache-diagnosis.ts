@@ -25,7 +25,7 @@ export function cacheRecurrence(messages: Message[]) {
       }
     }
   }
-  return recurrence([...receipts.values()].sort((a, b) => b.at - a.at || b.order - a.order).map(({ receipt }) => ({ forecast: receipt.forecast, connection: receipt.connection, short: cacheShortfall(receipt)?.short ?? null })));
+  return recurrence([...receipts.values()].sort((a, b) => b.at - a.at || b.order - a.order).map(({ receipt }) => receipt), (receipt) => cacheShortfall(receipt)?.short ?? null);
 }
 
 export const cacheShortfall = (receipt: Receipt) => shortfall(receipt.forecast, receipt.usage?.cachedInputTokens ?? null, receipt.calibration ? tokenProjection(receipt.calibration, receipt.usage).ratio : null);
@@ -35,7 +35,6 @@ export const cacheShortfall = (receipt: Receipt) => shortfall(receipt.forecast, 
 export function shortfallPlace(entry: LogEntry | null, short: CacheShortfall) {
   const { wire, prompt } = entry ?? {};
   if (!wire || !prompt) return null;
-  const parts = wire.map(({ index }) => ({ ...prompt.parts[index]!, role: prompt.messages[index]!.role }));
-  const at = readReach(parts, short);
-  return at === null ? null : parts[at]!;
+  const at = readReach(wire.map(({ index }) => prompt.parts[index]!), short);
+  return at === null ? null : { from: prompt.parts[wire[at]!.index]!.from, role: prompt.messages[wire[at]!.index]!.role };
 }

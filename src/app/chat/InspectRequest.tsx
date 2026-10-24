@@ -11,8 +11,8 @@ import { MODEL_SETTINGS, opens, PRE_READ, UNKNOWN } from '../common/words';
 import { useSession, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { Button, Callout, CodeBlock, Disclosure, Empty, Facts, Gauge, List, ListItem, Row, Section, Stack, Text } from '../ui';
-import { BrokenPartView, breakKind, diagnosed, firstCause, RecurrenceNote, shortStreak } from './CacheDiagnosis';
-import { BROKEN, profileName, reads, why } from './ChatCache';
+import { BrokenPartView, breakKind, diagnosed, RecurrenceNote } from './CacheDiagnosis';
+import { nextWarning, profileName } from './ChatCache';
 import { partName, RequestView } from './ChatSent';
 import { HookList, STAGES } from './InspectScripts';
 import type { Side } from './panels';
@@ -185,17 +185,17 @@ function cacheRows(parts: ForecastPart[]): CacheRow[] {
 
 type NextCacheProps = { next: NonNullable<CacheNotes['next']>; recurrence: CacheNotes['recurrence']; editor: (from: From) => Side | null; onEdit: (side: Side) => void };
 
-function NextCache({ next: { forecast, diagnosis, cost: price, route }, recurrence, editor, onEdit }: NextCacheProps) {
+function NextCache({ next, recurrence, editor, onEdit }: NextCacheProps) {
+  const { forecast, diagnosis, cost: price, route } = next;
   const store = useStore();
   const [open, setOpen] = useState<string | null>(null);
   const { against, written, tail, removed } = forecast;
-  const streak = shortStreak(recurrence, route.connection.id);
+  const warning = nextWarning(next, recurrence, profileName(store, route));
   const off = against?.broken?.kind === 'off' ? { label: opens(MODEL_SETTINGS), onClick: () => navigate({ kind: 'model', ...refOf(route.connection.id, route.model) }) } : undefined;
   return (
     <Stack gap="group">
       <RecurrenceNote recurrence={recurrence} />
-      {streak && <Callout tone="warn">{streak.why}</Callout>}
-      {against?.broken && <Callout tone="warn" action={off}>{[`${BROKEN}: ${why(against.broken, profileName(store, route))}`, firstCause(diagnosis, against.broken), reads(against)].filter(Boolean).join(' ')}</Callout>}
+      {warning && <Callout tone="warn" action={off}>{`${warning.words}: ${warning.why}`}</Callout>}
       <Facts
         variant="tiles"
         items={[

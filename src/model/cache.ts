@@ -64,8 +64,8 @@ export type CacheDiagnosis = {
   missing: number;
 };
 // The latest ten distinct reply calls: considered have forecasts, missing do not. broken: those that read less than the
-// last call cached, as forecast (causes, the first break only being stored) or as the provider reported (short, a
-// shortfall the forecast did not see). streak: the newest run of shortfalls on one connection, unjudged replies skipped.
+// last call cached, as forecast (causes, the first break only being stored) or as the provider reported (short, read
+// under the forecast; a reply can be both). streak: the newest run of shortfalls on one connection, unjudged replies skipped.
 export type CacheRecurrence = { considered: number; missing: number; broken: number; short: number; causes: { cause: CacheBreak; count: number }[]; streak: { connection: string; count: number } | null };
 // expected is calibrated to native counts when ratio is known; otherwise it remains the o200k estimate.
 export type CacheShortfall = { expected: number; actual: number; ratio: number | null; short: boolean };

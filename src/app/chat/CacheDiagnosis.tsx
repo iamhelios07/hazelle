@@ -1,5 +1,6 @@
-import type { CacheBreak, CacheCause, CacheDiagnosis, CacheRecurrence, CacheShortfall } from '../../model/cache';
-import { shortfallPlace } from '../../runtime/cache-diagnosis';
+import type { CacheBreak, CacheCause, CacheDiagnosis, CacheRecurrence } from '../../model/cache';
+import type { Receipt } from '../../model/chat';
+import { cacheShortfall, shortfallPlace } from '../../runtime/cache-diagnosis';
 import type { LogEntry } from '../../runtime/request-log';
 import { tokens } from '../common/receipt';
 import type { ReactNode } from 'react';
@@ -115,17 +116,12 @@ export function RecurrenceNote({ recurrence }: { recurrence: CacheRecurrence }) 
   );
 }
 
-const SHORT = '예상보다 적게 읽음';
-// More than the two sends a pattern takes: this one warns about the next send, from what the provider alone saw.
-const STREAK = 3;
+export const SHORT = '예상보다 적게 읽음';
 
-// The warning for a send on connection, when its latest replies kept reading less than forecast.
-export function shortStreak({ streak }: CacheRecurrence, connection: string): { words: string; why: string } | null {
-  if (!streak || streak.connection !== connection || streak.count < STREAK) return null;
-  return { words: SHORT, why: `이 연결은 최근 ${streak.count}번 연속 예상보다 적게 읽었어요. 제공자가 캐시를 비우거나 요청을 바꾸는 것 같아요.` };
-}
-
-export function ShortfallNote({ shortfall, entry }: { shortfall: CacheShortfall; entry: LogEntry | null }) {
+// Nothing unless the provider read clearly less than the receipt's forecast.
+export function ShortfallNote({ receipt, entry }: { receipt: Receipt; entry: LogEntry | null }) {
+  const shortfall = cacheShortfall(receipt);
+  if (!shortfall?.short) return null;
   const place = shortfallPlace(entry, shortfall);
   return (
     <Text variant="note">

@@ -86,7 +86,7 @@ function Row({ entry, open, onToggle }: { entry: LogEntry; open: boolean; onTogg
         (open || broken || short?.short) && (
           <Stack gap="related">
             {broken && <Text variant="note">{[`${BROKEN}: ${why(broken, null)}`, firstCause(entry.diagnosis, broken)].filter(Boolean).join(' ')}</Text>}
-            {short?.short && <ShortfallNote shortfall={short} entry={entry} />}
+            <ShortfallNote receipt={receipt} entry={entry} />
             {open && (
               <>
                 {parts.length > 0 && (
