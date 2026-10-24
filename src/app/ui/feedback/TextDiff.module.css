@@ -29,14 +29,23 @@
 }
 
 .fold {
-  display: inline;
-  padding: 0 var(--space-4);
+  display: block;
+  width: 100%;
+  margin: var(--space-4) 0;
+  padding: var(--space-2) 0;
   border-radius: var(--space-2);
   background: var(--color-bg);
   color: var(--color-text-muted);
   font: inherit;
+  text-align: center;
 }
 
 .fold:hover {
   color: var(--color-text);
+}
+
+.inline {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
 }

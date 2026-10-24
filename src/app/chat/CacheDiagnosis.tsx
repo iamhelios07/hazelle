@@ -1,6 +1,7 @@
 import type { CacheBreak, CacheCause, CacheDiagnosis, CacheRecurrence, CacheShortfall } from '../../model/cache';
 import { tokens } from '../common/receipt';
-import { Hint, Stack, Text, TextDiff } from '../ui';
+import type { ReactNode } from 'react';
+import { Hint, Row, Stack, Tag, Text, TextDiff } from '../ui';
 import { partName } from './ChatSent';
 import { silentReason } from './InspectModules';
 
@@ -13,11 +14,20 @@ const quoted = (value: string) => (value === '' ? '(빈 값)' : `'${value.length
 
 const VARYING = '보낼 때마다 달라지는 내용이 캐시 지점 앞에 있으면, 그 뒤는 매번 새로 저장해요. 달라지는 부분을 프롬프트 뒤쪽, 마지막 캐시 지점 뒤로 옮기면 앞부분은 계속 읽혀요.';
 
-// One sentence per cause, and behind its ⓘ what would keep it from breaking.
-function cause(cause: CacheCause): { line: string; help: string | null } {
+// One sentence per cause, and behind its ⓘ what would keep it from breaking. shown: the sentence as the part's detail
+// draws it, where it differs from the line the send note reads.
+function cause(cause: CacheCause): { line: string; shown?: ReactNode; help: string | null } {
   switch (cause.kind) {
     case 'tag':
-      return { line: `${cause.tag} 값이 바뀌었어요: ${quoted(cause.before)} → ${quoted(cause.after)}.`, help: VARYING };
+      return {
+        line: `${cause.tag} 값이 바뀌었어요: ${quoted(cause.before)} → ${quoted(cause.after)}.`,
+        shown: (
+          <>
+            {`${cause.tag} 값이 바뀌었어요 `}<TextDiff inline label="전" runs={[{ kind: 'before', text: cause.before || '(빈 값)' }]} /> → <TextDiff inline label="후" runs={[{ kind: 'after', text: cause.after || '(빈 값)' }]} />
+          </>
+        ),
+        help: VARYING,
+      };
     case 'lore': {
       const fired = cause.after?.fired ?? false;
       const quiet = !fired && cause.after && !cause.after.fired ? ` (${silentReason(cause.after.why)})` : '';
@@ -59,10 +69,10 @@ export function BrokenPartView({ part }: { part: BrokenPart }) {
   return (
     <Stack gap="related">
       {part.causes.map((each, index) => {
-        const { line, help } = cause(each);
+        const { line, shown, help } = cause(each);
         return (
           <Text key={index}>
-            {line}
+            {shown ?? line}
             {help && <Hint label="깨지지 않게 하려면">{help}</Hint>}
           </Text>
         );
@@ -72,6 +82,7 @@ export function BrokenPartView({ part }: { part: BrokenPart }) {
       ) : (
         differs && (
           <>
+            <Text variant="note">바뀐 곳</Text>
             <TextDiff runs={diff.runs} label={`${partName(part.from, part.role)}: 직전 요청과 비교`} />
             {diff.coarse && <Text variant="note">달라진 곳이 길어서 글자 단위로 맞추지 않고 통째로 보여 줘요.</Text>}
           </>
@@ -88,8 +99,17 @@ const breakLabel = (broken: CacheBreak) => ('from' in broken ? `${partName(broke
 export function RecurrenceNote({ recurrence }: { recurrence: CacheRecurrence }) {
   const { considered, broken, causes } = recurrence;
   if (broken < 2) return null;
-  const top = [...causes].sort((a, b) => b.count - a.count).slice(0, 3).map(({ cause: each, count }) => `${breakLabel(each)} ${count}번`);
-  return <Text variant="note">{`최근 응답 ${considered}번 중 ${broken}번 캐시가 깨졌어요: ${top.join(' · ')}`}</Text>;
+  const top = [...causes].sort((a, b) => b.count - a.count).slice(0, 3);
+  return (
+    <Stack gap="related">
+      <Text variant="note">{`최근 응답 ${considered}번 중 ${broken}번 캐시가 깨졌어요.`}</Text>
+      <Row kind="tags">
+        {top.map(({ cause: each, count }, index) => (
+          <Tag key={index}>{`${breakLabel(each)} ${count}번`}</Tag>
+        ))}
+      </Row>
+    </Stack>
+  );
 }
 
 export function ShortfallNote({ shortfall }: { shortfall: CacheShortfall }) {
