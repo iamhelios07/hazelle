@@ -87,8 +87,8 @@ export type From =
 // tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. invalidKeys: regex keys that
 // did not compile (design.md row 2: never match, listed). loreBudget: the 로어북 최대 분량 the activation was held to. memory: null while the
 // chat's memory is off. dropped: the chat's messages the budget left out, oldest first. problems: the first MOST_PROBLEMS
-// found, and how many more there were. source is the chat/memory text before rendering; cbs proves a whole-part render.
-export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string; source?: string; cbs?: CacheRender }[]; lore: (Fired & { name: string })[] | null; silent: (Silent & { name: string })[] | null; invalidKeys: { entry: string; name: string; key: string }[]; loreBudget: number; memory: MemorySent | null; dropped: number; problems: { found: Problem[]; omitted: number } };
+// found, and how many more there were. source is the chat/memory text before rendering; cbs, the renders the part sends verbatim.
+export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string; source?: string; cbs?: CacheRender[] }[]; lore: (Fired & { name: string })[] | null; silent: (Silent & { name: string })[] | null; invalidKeys: { entry: string; name: string; key: string }[]; loreBudget: number; memory: MemorySent | null; dropped: number; problems: { found: Problem[]; omitted: number } };
 
 // What went wrong in a text outside the chat's messages the request was built from, at the block or entry it was rendered
 // for, once per text: from may match no part, when that text rendered to nothing and was left out. An error text counts
@@ -182,7 +182,7 @@ function lay(scope: ChatScope, blocks: Block[], history: HistoryMessage[], varia
   const placed = (text: string, place: string, cast?: string) => {
     const source = atPositions(text, positions);
     const now = rendered(source, place, cast);
-    renders.set(place, { text: source, rendered: now.out, seed: `${seed}:${place}`, ...(cast !== undefined && { cast }) });
+    renders.set(place, { place, text: source, rendered: now.out, seed: `${seed}:${place}`, ...(cast !== undefined && { cast }) });
     problems.set(place, now.problems);
     return now.out;
   };
@@ -391,9 +391,10 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, answe
     return {
       messages: sent.map(({ message }) => message),
       parts: sent.map(({ message, from, origin }) => {
-        const cbs = 'id' in from && from.id ? laid.rendered.get(from.id) : undefined;
+        const id = 'id' in from ? from.id : undefined;
+        const cbs = id ? [...laid.rendered.values()].filter(({ place, rendered }) => (place === id || place.startsWith(`${id}:`)) && rendered && message.content.includes(rendered)) : [];
         const source = from.kind === 'block' && from.slot === 'chat' ? origin === undefined ? undefined : sources.get(origin) : from.kind === 'block' && from.slot === 'memory' ? told?.text ?? recalled?.text : undefined;
-        return { from, tokens: tokens(message.content), ...(origin !== undefined && { origin }), ...(source !== undefined && { source }), ...(cbs?.rendered === message.content && { cbs }) };
+        return { from, tokens: tokens(message.content), ...(origin !== undefined && { origin }), ...(source !== undefined && { source }), ...(cbs.length > 0 && { cbs }) };
       }),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
       silent: activation && activation.silent.map((silent) => ({ ...silent, name: named(silent.id) })),

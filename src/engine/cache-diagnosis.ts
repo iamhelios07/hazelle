@@ -43,14 +43,23 @@ export function cacheTags(before: string, after: string, source: string, trace: 
   return steps.flatMap((step, index) => values[index] === step.result ? [] : [{ kind: 'tag', tag: source.slice(step.at, step.headEnd ?? step.end), before: values[index]!, after: step.result }]);
 }
 
-function tags(scope: ChatScope, variables: () => ReadonlyMap<string, string>, old: CacheRender | undefined, next: CacheRender | undefined, before: string, after: string): Extract<CacheCause, { kind: 'tag' }>[] {
-  if (before === after || !old || !next || old.text !== next.text || old.rendered !== before || next.rendered !== after) return [];
-  const trace: CbsTrace = { steps: [], omitted: 0 };
-  const cast = next.cast === undefined ? null : scope.cast.find(({ id }) => id === next.cast);
-  if (next.cast !== undefined && !cast) return [];
-  const rendered = renderAfter(cast ? { ...scope, card: cast.card } : scope, next.text, { seed: next.seed }, null, trace, variables());
-  if (typeof rendered !== 'string' || rendered.trim() !== after) return [];
-  return cacheTags(before, after, next.text, trace);
+function tags(scope: ChatScope, variables: () => ReadonlyMap<string, string>, old: CacheRender[] | undefined, next: CacheRender[] | undefined, before: string, after: string): Extract<CacheCause, { kind: 'tag' }>[] {
+  if (before === after || !old || !next) return [];
+  const changed = next.flatMap((piece) => {
+    const was = old.find(({ place }) => place === piece.place);
+    return was && was.text === piece.text && was.rendered !== piece.rendered ? [{ was, piece }] : [];
+  });
+  // The changed renders must account for the whole difference: with their old output put back, the old text returns.
+  // Anything else that changed the part (a script, 토큰 절약) leaves it unproven.
+  if (!changed.length || changed.reduce((text, { was, piece }) => text.replace(piece.rendered, () => was.rendered), after) !== before) return [];
+  return changed.flatMap(({ was, piece }) => {
+    const trace: CbsTrace = { steps: [], omitted: 0 };
+    const cast = piece.cast === undefined ? null : scope.cast.find(({ id }) => id === piece.cast);
+    if (piece.cast !== undefined && !cast) return [];
+    const rendered = renderAfter(cast ? { ...scope, card: cast.card } : scope, piece.text, { seed: piece.seed }, null, trace, variables());
+    if (typeof rendered !== 'string' || rendered.trim() !== piece.rendered) return [];
+    return cacheTags(was.rendered, piece.rendered, piece.text, trace);
+  });
 }
 
 export function cacheDiagnosis({ forecast, before, after }: CacheComparison, scope: ChatScope): CacheDiagnosis {

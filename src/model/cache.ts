@@ -73,5 +73,6 @@ export type CacheText = { content: string; index: number }[];
 
 export type CacheComparison = { forecast: Forecast; before: { prompt?: Assembled; wire?: CacheText } | null; after: { prompt: Assembled; wire: CacheText } };
 
-// No trace is kept per send. A diagnosis replays this source and must match rendered to the actual wire text.
-export type CacheRender = { text: string; rendered: string; seed: string; cast?: string };
+// No trace is kept per send. A diagnosis replays this source and must match rendered to the actual wire text. place
+// pairs a render across sends: a part's own id, or `${id}:…` for a piece of it (the description block's per-character texts).
+export type CacheRender = { place: string; text: string; rendered: string; seed: string; cast?: string };
