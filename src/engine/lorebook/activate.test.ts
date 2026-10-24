@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { HistoryMessage } from '../history';
-import type { Card, LoreEntry } from '../import/types';
+import type { LoreEntry } from '../import/types';
 import { onProgress } from '../progress';
-import { prepareLore, type Activation, type LoreEntries, type LoreTurn } from './activate';
+import { prepareLore, type Activation, type LoreEntries, type LoreScan, type LoreTurn } from './activate';
 
-const NULLS = { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null };
+const SCAN: LoreScan = { scanDepth: 5, tokenBudget: 800, recursive: true, fullWordMatching: false };
 
 const lore = (id: string, value: Partial<Omit<LoreEntry, 'folder'>>) => ({
   id,
@@ -25,8 +25,8 @@ const lore = (id: string, value: Partial<Omit<LoreEntry, 'folder'>>) => ({
   },
 });
 const chat = (...texts: string[]): HistoryMessage[] => texts.map((text, i) => ({ id: `m${i}`, message: `m${i}`, seed: `m${i}`, role: i % 2 ? 'assistant' : 'user', text, time: null }));
-const run = (entries: LoreEntries, history: HistoryMessage[], more: Partial<LoreTurn> & { settings?: Card['loreSettings']; budget?: number } = {}) =>
-  prepareLore(entries, more.settings ?? NULLS, more.budget ?? 800).activate({ history, greeting: 0, afterMatch: [], seed: 'send', cost: (_, body) => body.length, marks: new Set(['main', 'globalNote']), ...more });
+const run = (entries: LoreEntries, history: HistoryMessage[], more: Partial<LoreTurn> & { settings?: Partial<LoreScan> } = {}) =>
+  prepareLore(entries, { ...SCAN, ...more.settings }).activate({ history, greeting: 0, afterMatch: [], seed: 'send', cost: (_, body) => body.length, marks: new Set(['main', 'globalNote']), ...more });
 const order = (activation: Activation) => activation.placed.map(({ id }) => id);
 const ids = (activation: Activation) => order(activation).sort();
 const why = (activation: Activation, id: string) => activation.fired.find((fired) => fired.id === id)?.why;
@@ -36,7 +36,7 @@ describe('activate', () => {
     let signs = 0;
     onProgress(() => signs++);
     try {
-      run([lore('dragon', { keys: ['dragon'] }), lore('sword', { keys: ['sword'] })], chat('a dragon'), { settings: { ...NULLS, recursive: false } });
+      run([lore('dragon', { keys: ['dragon'] }), lore('sword', { keys: ['sword'] })], chat('a dragon'), { settings: { recursive: false } });
     } finally {
       onProgress(() => {});
     }
@@ -55,7 +55,7 @@ describe('activate', () => {
   });
 
   it('matches whole words at letter and digit boundaries in full-word mode, per entry', () => {
-    const settings = { ...NULLS, fullWordMatching: true };
+    const settings = { fullWordMatching: true };
     const entries = [
       lore('word', { keys: ['cat'] }),
       lore('exact', { keys: ['cat'], caseSensitive: true }),
@@ -117,7 +117,7 @@ describe('activate', () => {
       lore('none', { keys: ['five'], content: '@@scan_depth 0\nnone' }),
     ];
     expect(ids(run(entries, history))).toEqual(['deep']);
-    expect(ids(run(entries, history, { settings: { ...NULLS, scanDepth: 6 } }))).toEqual(['deep', 'default']);
+    expect(ids(run(entries, history, { settings: { scanDepth: 6 } }))).toEqual(['deep', 'default']);
   });
 
   it('scans the bodies of fired entries in later passes and names the entry a key matched in', () => {
@@ -131,7 +131,7 @@ describe('activate', () => {
     const result = run(entries, chat('to the castle'));
     expect(ids(result)).toEqual(['castle', 'flat', 'moat']);
     expect(why(result, 'moat')).toEqual({ kind: 'keys', matched: [{ query: 'primary', key: 'moat', source: { kind: 'entry', id: 'castle' } }] });
-    expect(ids(run(entries, chat('to the castle'), { settings: { ...NULLS, recursive: false } }))).toEqual(['castle', 'flat']);
+    expect(ids(run(entries, chat('to the castle'), { settings: { recursive: false } }))).toEqual(['castle', 'flat']);
   });
 
   it('retains earlier key and exclusion evidence while consuming only new recursive bodies', () => {
@@ -178,7 +178,7 @@ describe('activate', () => {
     let reads = 0;
     const history = chat('bell', 'quiet', 'quiet', 'quiet').map((message) => ({ ...message, get text() { reads++; return message.text; } }));
     const entries = [lore('sticky', { keys: ['bell'], content: '@@scan_depth 3\n@@unknown\n@@@keep_activate_after_match\nsticky' })];
-    const book = prepareLore(entries, { ...NULLS, scanDepth: 1 }, 800);
+    const book = prepareLore(entries, { ...SCAN, scanDepth: 1 });
     const input = { history: history.slice(0, 3), greeting: null, afterMatch: [], seed: 'send', cost: (_: string, body: string) => body.length, marks: new Set<string>() };
     const first = book.activate(input);
     expect(book.sticky).toBe(true);
@@ -187,7 +187,7 @@ describe('activate', () => {
     expect(reads).toBe(3);
     expect(book.activate(input).fired).toEqual(first.fired);
     expect(reads).toBe(3);
-    expect(prepareLore([{ ...entries[0]!, value: { ...entries[0]!.value, enabled: false } }], NULLS, 800).sticky).toBe(false);
+    expect(prepareLore([{ ...entries[0]!, value: { ...entries[0]!.value, enabled: false } }], SCAN).sticky).toBe(false);
   });
 
   it('gates on the turn and the greeting, and fires @@activate without keys under the same gates', () => {
@@ -232,7 +232,7 @@ describe('activate', () => {
       lore('mid', { constant: true, insertionOrder: 2, content: `@@priority 5\n${'x'.repeat(30)}` }),
       lore('last', { constant: true, insertionOrder: 0, content: '@@ignore_on_max_context\nx' }),
     ];
-    const result = run(entries, [], { budget: 100 });
+    const result = run(entries, [], { settings: { tokenBudget: 100 } });
     expect(order(result)).toEqual(['last', 'mid', 'high']);
     expect(result.fired.find(({ id }) => id === 'low')?.fate).toEqual({ kind: 'dropped', cause: 'budget', tokens: 50 });
     expect(order(run([lore('a', { constant: true }), lore('b', { constant: true })], []))).toEqual(['b', 'a']);

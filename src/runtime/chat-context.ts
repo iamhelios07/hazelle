@@ -3,7 +3,8 @@ import { modelSettings } from '../connectors/registry';
 import { fit, type ModelSettings } from '../connectors/settings';
 import type { Starred } from '../connectors/types';
 import type { Display } from '../engine/display';
-import type { Pack } from '../engine/import/types';
+import type { Card, Pack } from '../engine/import/types';
+import type { LoreScan } from '../engine/lorebook/activate';
 import type { Box } from '../engine/regex/scripts';
 import type { ChatScope } from '../engine/render';
 import type { TranslationRequest } from '../engine/translate';
@@ -11,7 +12,7 @@ import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
 import type { Toggle, ToggleLine } from '../model/prompt';
 import { without } from '../model/fields';
-import { EMPTY_SETTINGS, SETTINGS_ID } from '../model/settings';
+import { EMPTY_SETTINGS, SETTINGS_ID, type Settings } from '../model/settings';
 import { chatToggles, toggleValue } from '../model/toggles';
 import { chatModel, type Route } from './assignment';
 import { chatTranslate } from './features';
@@ -50,13 +51,37 @@ export function packsOf(store: Reader['store'], chat: Pick<Chat, 'character' | '
   ];
 }
 
-export const LORE_BUDGET = 50_000;
+// 재귀 검색 is off by default, where Risu's is on (ruled 2026-10-24): chained entries flood a chat with unrelated lore.
+export const LORE_SCAN: LoreScan = { scanDepth: 5, tokenBudget: 50_000, recursive: false, fullWordMatching: false };
 
-export const loreBudgetOf = (store: Reader['store']) => store.get('settings', SETTINGS_ID)?.value.loreBudget ?? LORE_BUDGET;
+const SHARED_SCAN = { scanDepth: 'loreDepth', tokenBudget: 'loreBudget', recursive: 'loreRecursive', fullWordMatching: 'loreFullWord' } as const satisfies { [K in keyof LoreScan]: keyof Settings };
+
+// The account's, which every chat follows where its character sets none.
+export function sharedLoreScan(store: Reader['store']): LoreScan {
+  const settings = store.get('settings', SETTINGS_ID)?.value;
+  return {
+    scanDepth: settings?.loreDepth ?? LORE_SCAN.scanDepth,
+    tokenBudget: settings?.loreBudget ?? LORE_SCAN.tokenBudget,
+    recursive: settings?.loreRecursive ?? LORE_SCAN.recursive,
+    fullWordMatching: settings?.loreFullWord ?? LORE_SCAN.fullWordMatching,
+  };
+}
 
 // The default is kept as none, so it follows the default.
-export const setLoreBudget = (store: ObjectStore, budget: number) =>
-  store.upsert('settings', (current = EMPTY_SETTINGS) => (budget === LORE_BUDGET ? without(current, 'loreBudget') : { ...current, loreBudget: budget }));
+export const setSharedLoreScan = <K extends keyof LoreScan>(store: ObjectStore, key: K, value: LoreScan[K]) =>
+  store.upsert('settings', (current = EMPTY_SETTINGS) => (value === LORE_SCAN[key] ? without(current, SHARED_SCAN[key]) : { ...current, [SHARED_SCAN[key]]: value }));
+
+// The character's own over the account's (ruled 2026-10-14), for every lorebook in its chats.
+export function loreScanOf(store: Reader['store'], card: Card | null): LoreScan {
+  const shared = sharedLoreScan(store);
+  const own = card?.loreSettings;
+  return {
+    scanDepth: own?.scanDepth ?? shared.scanDepth,
+    tokenBudget: own?.tokenBudget ?? shared.tokenBudget,
+    recursive: own?.recursive ?? shared.recursive,
+    fullWordMatching: own?.fullWordMatching ?? shared.fullWordMatching,
+  };
+}
 
 export const ANSWER_INSTRUCTION = '(OOC: Continue the story with your next reply.)';
 
@@ -93,8 +118,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     prompt: prompt.kind === 'prompt' ? prompt.prompt.value : null,
     note: chat.note ?? null,
     lore: loreOwners.flatMap(({ id: owner }) => store.children('lore', owner)),
-    // The character's own over the account's, as its scan settings are (ruled 2026-10-14).
-    loreBudget: card?.loreSettings.tokenBudget ?? loreBudgetOf(store),
+    loreScan: loreScanOf(store, card),
     loreFolders: Object.fromEntries(
       loreOwners.flatMap(({ id }) => {
         const folders = (store.get('character', id) ?? store.get('module', id) ?? store.get('chat', id))?.value.loreFolders ?? [];

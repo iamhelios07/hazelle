@@ -9,7 +9,7 @@ import { randomBytes } from '../vault/aead';
 import { sealFile } from '../vault/files';
 import { api } from './api';
 import { importCharacter, setToggle } from './characters';
-import { loreBudgetOf, setLoreBudget } from './chat-context';
+import { setSharedLoreScan, sharedLoreScan } from './chat-context';
 import { Files } from './files';
 import { MEMORY_DEFAULTS } from './memory-read';
 import { broughtFromRisu, fillInlays, fillPictures, importRisuChats, moveFromRisu, risuMatch, type MoveStep } from './move';
@@ -206,11 +206,11 @@ describe('moveFromRisu', () => {
     const { store, files } = await server.account();
     const backup = source({ characters: [], loreBudget: 150_000 });
     expect(await moveFromRisu(store, files, backup, backup.catalog, null, () => {})).toMatchObject({ ok: true, data: { loreBudget: 150_000 } });
-    expect(loreBudgetOf(store)).toBe(150_000);
-    await setLoreBudget(store, 3_000);
+    expect(sharedLoreScan(store).tokenBudget).toBe(150_000);
+    await setSharedLoreScan(store, 'tokenBudget', 3_000);
     const again = source({ characters: [], loreBudget: 9_000 });
     expect(await moveFromRisu(store, files, again, again.catalog, null, () => {})).toMatchObject({ ok: true, data: { loreBudget: null } });
-    expect(loreBudgetOf(store)).toBe(3_000);
+    expect(sharedLoreScan(store).tokenBudget).toBe(3_000);
   });
 
   it("gives every character it brings Risu's toggle values, and 캐릭터 없이 only the keys it holds none for", async () => {

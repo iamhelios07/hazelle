@@ -1,5 +1,5 @@
 import { DEFAULT_ORDER } from '../engine/import/convert';
-import type { LoreEntry } from '../engine/import/types';
+import type { Card, LoreEntry } from '../engine/import/types';
 import type { Stored } from '../model/kinds';
 import type { Lore, LoreFolder, LoreOwner } from '../model/library';
 import { allWritten, type ApiResult } from './api';
@@ -50,9 +50,9 @@ export function importedLore(owner: string, lore: LoreEntry[], names: string[]):
   return { folders, writes };
 }
 
-// null follows the account's 로어북 최대 분량 (chat-context loreBudgetOf).
-export const setCharacterLoreBudget = (store: ObjectStore, id: string, tokenBudget: number | null): Promise<ApiResult<Stored<'character'>>> =>
-  store.update('character', id, (current) => ({ ...current, card: { ...current.card, loreSettings: { ...current.card.loreSettings, tokenBudget } } }));
+// null follows the account's (chat-context loreScanOf).
+export const setCharacterLoreScan = (store: ObjectStore, id: string, change: Partial<Card['loreSettings']>): Promise<ApiResult<Stored<'character'>>> =>
+  store.update('character', id, (current) => ({ ...current, card: { ...current.card, loreSettings: { ...current.card.loreSettings, ...change } } }));
 
 function setFolders(store: ObjectStore, { kind, id }: LoreOwner, change: (folders: LoreFolder[]) => LoreFolder[]): Promise<ApiResult<unknown>> {
   switch (kind) {
@@ -64,6 +64,21 @@ function setFolders(store: ObjectStore, { kind, id }: LoreOwner, change: (folder
       return store.update('chat', id, (current) => ({ ...current, loreFolders: change(current.loreFolders ?? []) }));
   }
 }
+
+type ImportedLore = { entries: string[]; folders: string[] };
+
+// A lorebook file's entries added after the owner's own, its folders after the owner's. The entries go first: one naming
+// a folder not yet written sits in no folder until it is.
+export async function importLore(store: ObjectStore, owner: LoreOwner, lore: LoreEntry[], names: string[]): Promise<ApiResult<ImportedLore>> {
+  const { folders, writes } = importedLore(owner.id, lore, names);
+  const saved = await store.batch(writes);
+  if (!saved.ok) return saved;
+  const filed = folders.length > 0 ? await setFolders(store, owner, (current) => [...current, ...folders]) : saved;
+  return filed.ok ? { ok: true, data: { entries: writes.map(({ id }) => id), folders: folders.map(({ id }) => id) } } : filed;
+}
+
+export const undoLoreImport = (store: ObjectStore, owner: LoreOwner, { entries, folders }: ImportedLore) =>
+  allWritten([...entries.map((id) => store.take('lore', id)), ...(folders.length > 0 ? [setFolders(store, owner, (current) => current.filter(({ id }) => !folders.includes(id)))] : [])]);
 
 export const addLoreFolder = (store: ObjectStore, owner: LoreOwner, name: string) => setFolders(store, owner, (folders) => [...folders, { id: crypto.randomUUID(), name }]);
 

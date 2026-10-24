@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { fold, type Chat } from '../model/chat';
 import { blankCard } from '../engine/import/card';
-import { evaluateChat, scopeOf, setLoreBudget } from './chat-context';
+import { evaluateChat, scopeOf, setSharedLoreScan } from './chat-context';
 import { appendUserMessage, startChat } from './chat-log';
-import { addLore, setCharacterLoreBudget } from './lore';
+import { addLore, setCharacterLoreScan } from './lore';
 import { testServer } from './testing';
 
 const server = testServer();
@@ -42,15 +42,18 @@ describe('scopeOf', () => {
     expect(scopeOf({ store }, null, chat, []).lore.map(({ parent }) => parent)).toEqual([character.data.id, module.data.id]);
   });
 
-  it("takes the character's own 로어북 최대 분량 over the account's", async () => {
+  it("takes the character's own scan settings over the account's, with 재귀 검색 off by default", async () => {
     const { store } = await server.account();
     const card = blankCard('루나');
     const character = await store.create('character', { card: { ...card, loreSettings: { ...card.loreSettings, tokenBudget: 1500 } }, folder: null, loreFolders: [], modules: [] });
     if (!character.ok) throw new Error(character.error);
-    await setLoreBudget(store, 70_000);
+    await setSharedLoreScan(store, 'tokenBudget', 70_000);
     const chat: Chat = { title: null, character: character.data.id, models: {} };
-    expect(scopeOf({ store }, null, chat, []).loreBudget).toBe(1500);
-    await setCharacterLoreBudget(store, character.data.id, null);
-    expect(scopeOf({ store }, null, chat, []).loreBudget).toBe(70_000);
+    const scan = () => scopeOf({ store }, null, chat, []).loreScan;
+    expect(scan()).toEqual({ scanDepth: 5, tokenBudget: 1500, recursive: false, fullWordMatching: false });
+    await setCharacterLoreScan(store, character.data.id, { tokenBudget: null, recursive: true });
+    expect(scan()).toMatchObject({ tokenBudget: 70_000, recursive: true });
+    await setSharedLoreScan(store, 'scanDepth', 8);
+    expect(scopeOf({ store }, null, { title: null, character: null, models: {} }, []).loreScan).toMatchObject({ scanDepth: 8, recursive: false });
   });
 });

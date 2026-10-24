@@ -69,9 +69,8 @@ export type Activation = {
   afterMatch: string[];
 };
 
-// risu-alpha has no global scan settings, so a card's null settings take Risu's global defaults (risu-compat-spec §a
-// character_book conversion, §b Scan settings). The budget is the account's, which the caller passes.
-const DEFAULTS = { scanDepth: 5, recursive: true, fullWordMatching: false };
+// A chat's scan settings as they apply, none left open: the card's own over the account's (runtime/chat-context loreScanOf).
+export type LoreScan = { [K in keyof Card['loreSettings']]: NonNullable<Card['loreSettings'][K]> };
 
 type Where =
   | { kind: 'lorebook' }
@@ -127,10 +126,10 @@ const NEVER: Matcher = () => false;
 
 export type LoreBook = { sticky: boolean; activate: (input: LoreTurn) => Activation };
 
-export function prepareLore(entries: LoreEntries, settings: Card['loreSettings'], budget: number): LoreBook {
+export function prepareLore(entries: LoreEntries, settings: LoreScan): LoreBook {
   const invalidKeys: Activation['invalidKeys'] = [];
   // A disabled entry stays an id, unprepared: its keys are neither compiled nor reported.
-  const shelf = entries.map((entry) => (entry.value.enabled ? prepare(entry, settings.fullWordMatching ?? DEFAULTS.fullWordMatching, invalidKeys) : entry.id));
+  const shelf = entries.map((entry) => (entry.value.enabled ? prepare(entry, settings.fullWordMatching, invalidKeys) : entry.id));
   const books = shelf.filter((entry) => typeof entry !== 'string');
   // A prepared book belongs to one replay; edits/settings changes start another and cannot reuse stale text.
   const scanned = new WeakMap<HistoryMessage, Scanned>();
@@ -149,14 +148,12 @@ export function prepareLore(entries: LoreEntries, settings: Card['loreSettings']
   };
   return {
     sticky: books.some(({ rules }) => rules.trigger !== 'never' && rules.afterMatch !== null),
-    activate: (input) => activate(shelf, books, settings, budget, invalidKeys, window, input),
+    activate: (input) => activate(shelf, books, settings, invalidKeys, window, input),
   };
 }
 
-function activate(shelf: (Book | string)[], books: Book[], settings: Card['loreSettings'], budget: number, invalidKeys: Activation['invalidKeys'], window: (history: HistoryMessage[], depth: number) => Scanned[], { history, greeting, afterMatch: before, seed, cost, marks }: LoreTurn): Activation {
+function activate(shelf: (Book | string)[], books: Book[], { scanDepth, recursive, tokenBudget }: LoreScan, invalidKeys: Activation['invalidKeys'], window: (history: HistoryMessage[], depth: number) => Scanned[], { history, greeting, afterMatch: before, seed, cost, marks }: LoreTurn): Activation {
   const afterMatch = new Set(before);
-  const scanDepth = settings.scanDepth ?? DEFAULTS.scanDepth;
-  const recursive = settings.recursive ?? DEFAULTS.recursive;
   const chatLength = history.length + 1;
 
   const closed = ({ id, rules }: Book): Closed | null => {
@@ -205,7 +202,7 @@ function activate(shelf: (Book | string)[], books: Book[], settings: Card['loreS
   // Risu's budget and order (risu-compat-spec §b Budget, ordering, output), step by step: the stable sorts and
   // the final reverse decide where ties land.
   const tokens = new Map(active.map(({ id, body }) => [id, cost(id, body)]));
-  let left = budget;
+  let left = tokenBudget;
   const kept: Book[] = [];
   for (const book of [...active].sort((a, b) => b.rules.priority - a.rules.priority)) {
     const cost = tokens.get(book.id)!;

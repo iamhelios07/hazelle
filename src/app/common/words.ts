@@ -252,6 +252,13 @@ export const RETRYING = `${RESENDING}.`;
 export const RETRY_COUNT = '실패하면 다시 보내기';
 export const RETRY_HELP = '응답이 오기 전에 실패하면 이 횟수만큼 다시 시도해요. 다만 키나 요청 내용이 잘못됐을 때는 바로 알려 줘요.';
 export const LORE_BUDGET_LABEL = '로어북 최대 분량';
+// The lorebook's scan settings, worded once for 설정 › 채팅 and 캐릭터 편집 › 로어북.
+export const LORE_SCAN_WORDS = {
+  tokenBudget: { label: LORE_BUDGET_LABEL, help: '켜 둔 로어북 항목을 요청마다 이만큼까지 넣어요. 넘치는 항목은 빠지고, 빠지면 알려 드려요.', unit: '토큰', amount: (count: string) => `${count} 토큰`, is: '이에요' },
+  scanDepth: { label: '검색 깊이', help: '최근 메시지 몇 개에서 키워드를 찾을지 정해요.', unit: '개', amount: (count: string) => `${count}개`, is: '예요' },
+  recursive: { label: '재귀 검색', help: '들어간 항목의 내용에 다른 항목의 키워드가 있으면 그 항목도 이어서 넣어요. 항목마다 @@recursive나 @@unrecursive로 따로 정할 수도 있어요.' },
+  fullWordMatching: { label: '단어 단위 검색', help: "키워드가 다른 단어의 일부일 때는 찾지 않아요. 조사가 붙은 말도 다른 단어로 봐서, '달'은 '달빛'에서도 '달이'에서도 찾지 않아요." },
+} as const;
 // 응답 받기: the send button pressed with nothing typed.
 export const ANSWER = '응답 받기';
 export const ANSWER_INSTRUCTION_LABEL = `${ANSWER} 지시`;

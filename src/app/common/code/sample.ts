@@ -16,7 +16,7 @@ export const SAMPLE: ChatScope = {
   note: null,
   lore: [],
   loreFolders: {},
-  loreBudget: 0,
+  loreScan: { scanDepth: 5, tokenBudget: 0, recursive: false, fullWordMatching: false },
   messages: [
     { id: 'm1', message: 'm1', seed: 'm1', role: 'user', text: '안녕', time: null },
     { id: 'm2', message: 'm2', seed: 'm2', role: 'assistant', text: '안녕, 나. 비가 와서 우산을 챙겼어.', time: null },

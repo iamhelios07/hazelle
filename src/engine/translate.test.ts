@@ -22,7 +22,7 @@ const scope: ChatScope = {
   note: null,
   lore: [],
   loreFolders: {},
-  loreBudget: 800,
+  loreScan: { scanDepth: 5, tokenBudget: 800, recursive: true, fullWordMatching: false },
   messages: [message('u1', 'user', 'Is the lamp lit?'), message('a1', 'assistant', 'The lamp is lit, {{user}}.')],
   greeting: null,
   toggles: new Map(),

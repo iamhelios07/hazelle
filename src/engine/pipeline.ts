@@ -144,8 +144,7 @@ function lay(scope: ChatScope, blocks: Block[], history: HistoryMessage[], varia
   // One merged into another entry or set inside another text is evaluated there, and its count is of its own body.
   // The replays below count the same bodies again.
   const count = (id: string, body: string) => tokens(render(body, id, owners.get(id)));
-  // The account's budget, never a card's own token_budget: the user sets how much lore every chat sends.
-  const book = prepareLore(scope.lore, card?.loreSettings ?? NO_SETTINGS, scope.loreBudget);
+  const book = prepareLore(scope.lore, scope.loreScan);
   const activation = card || scope.lore.length > 0 ? book.activate(loreInput(scope, history, history.length, afterMatch(scope, book, count), seed, count, marksOf(blocks))) : null;
   const names = new Map(scope.lore.map(({ id, value }) => [id, value.name]));
 
@@ -388,7 +387,7 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, answe
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
       silent: activation && activation.silent.map((silent) => ({ ...silent, name: named(silent.id) })),
       invalidKeys: activation ? activation.invalidKeys.map((invalid) => ({ ...invalid, name: named(invalid.entry) })) : [],
-      loreBudget: scope.loreBudget,
+      loreBudget: scope.loreScan.tokenBudget,
       memory: told ? { by: told.name, text: told.text, covered, missing: 0, slot } : recalled && { by: null, sent: recalled.sent, found: retrieved?.ids ?? [], covered, missing: slot ? covered - recalled.held : covered, slot },
       dropped,
       problems,
@@ -644,9 +643,6 @@ function add<K, V>(map: Map<K, V[]>, key: K, value: V) {
 }
 
 const blockFrom = (block: Block): Extract<From, { kind: 'block' }> => ({ kind: 'block', id: block.id, name: block.name, slot: block.kind === 'slot' ? block.slot : null });
-
-// A chat with no card scans its modules' lore with every setting at the default.
-const NO_SETTINGS: Card['loreSettings'] = { scanDepth: null, tokenBudget: null, recursive: null, fullWordMatching: null };
 
 // end: where the reply being written stands in history, which holds the greeting first when the chat has one.
 function loreInput(scope: ChatScope, history: HistoryMessage[], end: number, afterMatch: string[], seed: string, cost: LoreTurn['cost'], marks: LoreTurn['marks']): LoreTurn {

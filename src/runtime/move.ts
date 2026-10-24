@@ -13,7 +13,7 @@ import { SETTINGS_ID } from '../model/settings';
 import type { ApiResult } from './api';
 import { createFolder } from './folders';
 import { importCharacter, orderFirst, saveAssets, setToggle, type ImportedCharacter, type Progress } from './characters';
-import { setLoreBudget } from './chat-context';
+import { setSharedLoreScan } from './chat-context';
 import { chatWrites, saveNewChats } from './chat-log';
 import type { Files } from './files';
 import { projectGreetings, startingGreetings } from './greetings';
@@ -63,7 +63,7 @@ async function move(store: ObjectStore, files: Files, backup: RisuBackup, { char
   // Only onto an account that has set none: one set here is the user's later choice.
   const loreBudget = store.get('settings', SETTINGS_ID)?.value.loreBudget === undefined ? backup.catalog.loreBudget : null;
   if (loreBudget !== null) {
-    const set = await setLoreBudget(store, loreBudget);
+    const set = await setSharedLoreScan(store, 'tokenBudget', loreBudget);
     if (!set.ok) return set;
   }
   // Risu kept one value per key for every chat, so every character this run brings takes them all. 캐릭터 없이 takes only

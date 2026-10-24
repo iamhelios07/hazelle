@@ -123,7 +123,7 @@ export function convert(raw: unknown, module: Json | null, tally: Tally, nativeL
   };
   const { lore, loreFolders } =
     nativeLore !== null ? nativeLorebook(nativeLore)
-      : module && Array.isArray(module.lorebook) ? nativeLorebook(module.lorebook) : lorebook(list(book.entries), BOOK_LORE);
+      : module && Array.isArray(module.lorebook) ? nativeLorebook(module.lorebook) : bookLorebook(list(book.entries));
   countInText(card, lore, tally);
   return { card, lore, loreFolders, spec, icon: icon && text(icon.uri), assets };
 }
@@ -370,6 +370,9 @@ function lorebook(raws: unknown[], source: LoreSource): { lore: LoreEntry[]; lor
 
 const nativeLorebook = (entries: unknown[]) => lorebook(entries, risuLore(true));
 
+// A CCv3 character_book's entries, in a card or a file of their own.
+export const bookLorebook = (entries: unknown[]) => lorebook(entries, BOOK_LORE);
+
 // A Risu chat's own lorebook (localLore), and an entry a bot writes to it. Never migrated: Risu's open-time migration
 // (characterFormatUpdate) runs over globalLore only, and these entries carry no bookVersion.
 export const chatLorebook = (entries: unknown[]) => lorebook(entries, risuLore(false));
@@ -473,7 +476,7 @@ function countInText(card: Card, lore: LoreEntry[], tally: Tally) {
   for (const entry of lore) add(tally, 'disable-ui-prompt', parseDecorators(entry.content).decorators.filter(({ name }) => name === 'disable_ui_prompt').length);
 }
 
-function countTags(texts: string[], tally: Tally) {
+export function countTags(texts: string[], tally: Tally) {
   for (const value of texts) {
     for (const [, name] of value.matchAll(/\{\{([^{}:]*)/g)) {
       if (isUnsupportedTag(name!)) add(tally, 'cbs-tag');

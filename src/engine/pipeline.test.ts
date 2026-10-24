@@ -82,7 +82,7 @@ const scope = ({ card: own = card(), ...over }: Partial<PromptInput['scope']> = 
   note: 'Rain tonight.',
   lore: [],
   loreFolders: {},
-  loreBudget: 800,
+  loreScan: { scanDepth: 5, tokenBudget: 800, recursive: true, fullWordMatching: false },
   messages: [message('g1', 'assistant', 'The lamp is lit, {{user}}.'), message('u1', 'user', 'Is it safe?'), message('a1', 'assistant', '{{setvar::mood::calm}}She nods. [OOC] ignore'), message('u2', 'user', 'Good.')],
   greeting: { index: 0 },
   toggles: new Map([['sims', '1']]),
@@ -281,18 +281,17 @@ describe('assemble', () => {
       lore('once', '@@dont_activate_after_match\nonce', { constant: false, keys: ['storm', 'Good'] }),
     ];
     const messages = [message('u1', 'user', 'A storm comes.'), message('a1', 'assistant', 'She shivers.'), message('u2', 'user', 'Good.')];
-    const sent = build({ card: card({ loreSettings: { scanDepth: 1, tokenBudget: null, recursive: null, fullWordMatching: null } }), lore: entries, messages, greeting: null });
+    const sent = build({ loreScan: { ...scope().loreScan, scanDepth: 1 }, lore: entries, messages, greeting: null });
     const lorebook = sent.filter(({ content }) => content === 'kept' || content === 'once');
     expect(lorebook).toEqual([{ role: 'system', content: 'kept' }]);
   });
 
-  it("fits the lorebook to the account's 로어북 최대 분량, never to a card's own budget", () => {
+  it("fits the lorebook to the scope's 로어북 최대 분량", () => {
     const entries = [lore('a', 'x'.repeat(40), { constant: true }), lore('b', 'y'.repeat(40), { constant: true })];
-    const own = card({ loreSettings: { scanDepth: null, tokenBudget: 1, recursive: null, fullWordMatching: null } });
-    const fates = (loreBudget: number) => assembledOf(assemble(input({ card: own, lore: entries, loreBudget }))).lore!.map(({ fate }) => fate.kind);
-    expect(fates(100)).toEqual(['placed', 'placed']);
-    expect(fates(50)).toEqual(['placed', 'dropped']);
-    expect(assembledOf(assemble(input({ card: own, lore: entries, loreBudget: 50 }))).loreBudget).toBe(50);
+    const held = (tokenBudget: number) => assembledOf(assemble(input({ lore: entries, loreScan: { ...scope().loreScan, tokenBudget } })));
+    expect(held(100).lore!.map(({ fate }) => fate.kind)).toEqual(['placed', 'placed']);
+    expect(held(50).lore!.map(({ fate }) => fate.kind)).toEqual(['placed', 'dropped']);
+    expect(held(50).loreBudget).toBe(50);
   });
 
   it('names the regex keys that did not compile, for 점검 to list (design.md row 2)', () => {

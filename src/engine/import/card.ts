@@ -1,4 +1,5 @@
-import { add, cardSource, convert, counted, extensionOf, finite, lorebookSource, record, strings, text, type Converted, type Json, type Tally } from './convert';
+import { add, cardSource, convert, convertModule, counted, extensionOf, lorebookSource, record, text, type Converted, type ConvertedModule, type Json, type Tally } from './convert';
+import { readLorebook } from './lorebook';
 import { METADATA_BYTES } from './inflate';
 import { hazelleSource, printOf, readHazelle, readModule, type ConvertedBundle } from './hazelle';
 import { UNSUPPORTED_KINDS, type Bot, type Card, type ImportFailure, type ImportedModule, type ImportReport, type ImportResult, type Imported, type LoreEntry } from './types';
@@ -128,10 +129,10 @@ export async function importRisum(source: FileSource): Promise<{ ok: true; modul
 function fromJson(bytes: Uint8Array<ArrayBuffer>): ImportResult {
   const tally: Tally = new Map();
   const raw: unknown = JSON.parse(utf8.decode(bytes));
-  const source = isRecord(raw) ? moduleSource(raw) : null;
+  const read = isRecord(raw) ? moduleOf(raw, tally) : null;
   // A module's JSON names its pictures without holding them.
-  if (source) {
-    const { assets, ...module } = readModule(source, tally);
+  if (read) {
+    const { assets, ...module } = read;
     add(tally, 'missing-asset', assets.length);
     return { ok: true, module: { ...module, assets: [], unsupported: counted(UNSUPPORTED_KINDS, tally) } };
   }
@@ -140,31 +141,13 @@ function fromJson(bytes: Uint8Array<ArrayBuffer>): ImportResult {
 }
 
 // Risu's module list also takes a lorebook or regex export, as a module made of it (modules.ts importModule); here every
-// way in does, since the shape says what the file is. A card keeps its lore under data, never in a top-level entries.
-function moduleSource(raw: Json): Json | null {
-  if (raw.type === 'risuModule') return raw;
-  const named = { name: raw.name, description: raw.description };
-  // type 'risu' with a record for data is a HypaV3 preset export.
-  if (raw.type === 'risu' && Array.isArray(raw.data)) return { ...named, lorebook: raw.data };
-  if (raw.type === 'regex' && Array.isArray(raw.data)) return { ...named, regex: raw.data };
-  if (isRecord(raw.entries) || Array.isArray(raw.entries)) return { ...named, lorebook: Object.values(raw.entries).filter(isRecord).map(externalLore) };
+// way in does, since the shape says what the file is.
+function moduleOf(raw: Json, tally: Tally): ConvertedModule | null {
+  if (raw.type === 'risuModule') return readModule(raw, tally);
+  const book = readLorebook(raw, tally);
+  if (book) return { ...convertModule({ name: book.name, description: book.description }, tally), lore: book.lore, loreFolders: book.loreFolders };
+  if (raw.type === 'regex' && Array.isArray(raw.data)) return readModule({ name: raw.name, description: raw.description, regex: raw.data }, tally);
   return null;
-}
-
-// SillyTavern's world info or NovelAI's .lorebook entry made into Risu's own, as convertExternalLorebook does
-// (lorebook.svelte.ts:732-750), adding keysecondary: SillyTavern's name for the secondary keys, which Risu misses.
-function externalLore(raw: Json): Json {
-  const joined = (value: unknown) => strings(value).join(', ');
-  return {
-    key: joined(raw.key ?? raw.keys ?? raw.keywords),
-    secondkey: joined(raw.secondary_keys ?? raw.keysecondary),
-    insertorder: finite(raw.order) ?? finite(raw.priority) ?? finite(record(raw.contextConfig).budgetPriority) ?? 0,
-    comment: text(raw.comment) || text(raw.name) || text(raw.displayName),
-    content: text(raw.content) || text(raw.entry) || text(raw.text),
-    mode: 'normal',
-    alwaysActive: (raw.constant ?? raw.forceActivation) === true,
-    selective: raw.selective === true,
-  };
 }
 
 type Holders = { zip?: Zip; chunks?: Map<string, string> };

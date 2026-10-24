@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { RETRIES } from '../../connectors/registry';
 import { RETRY_MOST } from '../../contracts/streams';
-import { ANSWER_INSTRUCTION, answerInstructionOf, LORE_BUDGET, loreBudgetOf, setAnswerInstruction, setLoreBudget, setUsageShown } from '../../runtime/chat-context';
+import { ANSWER_INSTRUCTION, answerInstructionOf, LORE_SCAN, setAnswerInstruction, setSharedLoreScan, setUsageShown, sharedLoreScan } from '../../runtime/chat-context';
 import { setSharedRetries } from '../../runtime/connections';
 import { DetailFold } from '../common/DetailFold';
 import { filled, typedText, useTypedNumber } from '../common/typed';
 import { count, readCount } from '../common/typedNumber';
 import { useAutosave } from '../common/useAutosave';
-import { ANSWER_INSTRUCTION_LABEL, LORE_BUDGET_LABEL, MODEL_SETTINGS, RETRY_COUNT, RETRY_HELP } from '../common/words';
+import { ANSWER_INSTRUCTION_LABEL, LORE_SCAN_WORDS, MODEL_SETTINGS, RETRY_COUNT, RETRY_HELP } from '../common/words';
 import { useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { NumberInput, SettingRow, Stepper, Switch, TextField } from '../ui';
@@ -15,11 +15,18 @@ import { NumberInput, SettingRow, Stepper, Switch, TextField } from '../ui';
 export function ChatDetailDefaults() {
   const store = useStore();
   const toast = useToast();
-  const { retries, loreBudget, answerInstruction, usageShown } = useSettings();
-  const save = useAutosave<{ loreBudget: number }>('lore-budget', (patch) => setLoreBudget(store, patch.loreBudget!));
-  const budget = useTypedNumber(readCount, save.unsaved.loreBudget ?? loreBudgetOf(store), { error: '1 이상의 정수를 입력해 주세요.', onChange: (value) => save.change({ loreBudget: value }) });
+  const { retries, loreBudget, loreDepth, loreRecursive, loreFullWord, answerInstruction, usageShown } = useSettings();
+  const shared = sharedLoreScan(store);
+  const flag = (key: 'recursive' | 'fullWordMatching', set: boolean | undefined) => (
+    <SettingRow
+      label={LORE_SCAN_WORDS[key].label}
+      help={`${LORE_SCAN_WORDS[key].help} 기본값은 ${LORE_SCAN[key] ? '켜짐' : '꺼짐'}이에요.`}
+      changed={set !== undefined}
+      control={<Switch label={LORE_SCAN_WORDS[key].label} checked={shared[key]} onChange={(on) => void setSharedLoreScan(store, key, on).then((result) => result.ok || toast.failed(result))} />}
+    />
+  );
   return (
-    <DetailFold set={[retries, loreBudget, answerInstruction, usageShown].filter((value) => value !== undefined).length}>
+    <DetailFold set={[retries, loreBudget, loreDepth, loreRecursive, loreFullWord, answerInstruction, usageShown].filter((value) => value !== undefined).length}>
       <SettingRow
         label={RETRY_COUNT}
         help={`${RETRY_HELP} API 연결이나 ${MODEL_SETTINGS}마다 따로 정할 수도 있어요.`}
@@ -36,13 +43,10 @@ export function ChatDetailDefaults() {
           />
         }
       />
-      <SettingRow
-        label={LORE_BUDGET_LABEL}
-        help={`켜 둔 로어북 항목을 요청마다 이만큼까지 넣어요. 넘치는 항목은 빠지고, 빠지면 알려 드려요. 기본값은 ${count(LORE_BUDGET)} 토큰이에요.`}
-        changed={loreBudget !== undefined}
-        error={budget.error}
-        control={<NumberInput label={LORE_BUDGET_LABEL} unit="토큰" value={budget.text} invalid={budget.error !== undefined} onChange={budget.change} />}
-      />
+      <SharedLoreNumber field="tokenBudget" changed={loreBudget !== undefined} />
+      {flag('recursive', loreRecursive)}
+      <SharedLoreNumber field="scanDepth" changed={loreDepth !== undefined} />
+      {flag('fullWordMatching', loreFullWord)}
       <AnswerInstructionField changed={answerInstruction !== undefined} />
       <SettingRow
         label={USAGE_SHOWN}
@@ -55,6 +59,22 @@ export function ChatDetailDefaults() {
 }
 
 const USAGE_SHOWN = '사용량 표시';
+
+function SharedLoreNumber({ field, changed }: { field: 'tokenBudget' | 'scanDepth'; changed: boolean }) {
+  const store = useStore();
+  const { label, help, unit, amount, is } = LORE_SCAN_WORDS[field];
+  const save = useAutosave<{ value: number }>(`lore-${field}`, (patch) => setSharedLoreScan(store, field, patch.value!));
+  const typed = useTypedNumber(readCount, save.unsaved.value ?? sharedLoreScan(store)[field], { error: '1 이상의 정수를 입력해 주세요.', onChange: (value) => save.change({ value }) });
+  return (
+    <SettingRow
+      label={label}
+      help={`${help} 기본값은 ${amount(count(LORE_SCAN[field]))}${is}.`}
+      changed={changed}
+      error={typed.error}
+      control={<NumberInput label={label} unit={unit} value={typed.text} invalid={typed.error !== undefined} onChange={typed.change} />}
+    />
+  );
+}
 
 function AnswerInstructionField({ changed }: { changed: boolean }) {
   const store = useStore();
