@@ -15,13 +15,14 @@
       function Chat() {
         const [rows, setRows] = useState(() => Array.from({ length: 10 }, (_, i) => ({ id: `m${i}`, height: 150 })));
         const [streaming, setStreaming] = useState(false);
+        const [composer, setComposer] = useState(90);
         const scroll = useFollow(rows.length, streaming, streaming ? 'user' : null, stay);
         const button = (label, onClick) => h('button', { onClick }, label);
         return h(ChatFrame, {
-          title: 'Chat scroll regression', actions: null, above: null,
+          title: 'Chat scroll regression', actions: null, above: scroll.pill && h('output', null, scroll.pill),
           reading: { font: 'sans', size: 16, leading: 'normal', width: 'normal', reply: stay ? 'stay' : 'follow' },
           hideHeader: false, compact: false, scrollRef: scroll.scrollRef, onScroll: scroll.onScroll,
-          footer: h('div', { style: { height: 90 } },
+          footer: h('div', { style: { height: composer } },
             button('Reply', () => {
               scroll.beforeTurn();
               setStreaming(true);
@@ -30,6 +31,7 @@
             button('Grow', () => setRows((rows) => rows.map((row) => row.id === 'reply' ? { ...row, height: row.height + 100 } : row))),
             button('Finish', () => setStreaming(false)),
             button('Follow', scroll.follow),
+            button('Type', () => setComposer((height) => height + 60)),
           ),
         }, h(Viewport, { variant: 'story', keys: rows.map((row) => row.id), seek: scroll.seek },
           (index) => h('div', { style: { height: rows[index].height } }, rows[index].id),

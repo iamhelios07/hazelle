@@ -50,6 +50,36 @@ for (const reply of ['stay', 'follow']) {
   });
 }
 
+test('a staying reply raises no pill as it grows under a reader at the end, and the composer growing keeps that end in view', async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await page.goto(`${url}e2e/fixtures/scroll.html?reply=stay`);
+  const frame = page.locator('main > div').filter({ has: page.locator('[data-key]') });
+  const distance = () => frame.evaluate((element) => element.scrollHeight - element.clientHeight - element.scrollTop);
+  const frames = () => page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+  const pill = page.locator('output');
+  const press = async (name: string) => {
+    await page.getByRole('button', { name, exact: true }).click();
+    await frames();
+  };
+  await press('Reply');
+  for (let i = 0; i < 10; i++) await press('Grow');
+  // Instant, as a smooth wheel would still be moving once the story grows and carry the view down on its own.
+  await frame.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await expect(pill).toHaveCount(0);
+  const top = await frame.evaluate((element) => element.scrollTop);
+  await press('Grow');
+  await press('Finish');
+  await press('Grow');
+  expect(await frame.evaluate((element) => element.scrollTop)).toBe(top);
+  await expect(pill).toHaveCount(0);
+  await frame.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await press('Type');
+  expect(await distance()).toBeLessThanOrEqual(1);
+  await expect(pill).toHaveCount(0);
+  await frame.evaluate((element) => { element.scrollTop -= 300; });
+  await expect(pill).toHaveText('맨 아래로');
+});
+
 test('a story drawn again, as a message flipped to its original, keeps the paragraph at the top of the view in place', async ({ page }) => {
   await page.setViewportSize({ width: 1200, height: 800 });
   await page.goto(`${url}e2e/fixtures/redraw.html`);

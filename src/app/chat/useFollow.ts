@@ -15,7 +15,8 @@ export function anchorOf(messages: readonly { id: string; role: string }[], repl
 }
 
 // stay (보낸 자리에 멈추기): a reply starting here puts anchor at the top, and from then on nothing
-// the story gains moves the view, not even at its end, until the pill takes it down (follow).
+// the story gains moves the view, not even at its end, nor raises the pill, which only the reader's own scroll does,
+// until the pill takes it down (follow).
 export function useFollow(count: number, streaming: boolean, anchor: string | null, stay: boolean) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
@@ -54,19 +55,27 @@ export function useFollow(count: number, streaming: boolean, anchor: string | nu
   // A reply grows between the renders of the story as it is revealed (useReveal), so the view follows its size too, a
   // row's as soon as the story has it (ROWS_RESIZED); not a size the reader changed (Story sends READER_RESIZED), which
   // moves the bottom without a scroll. The border box holds the room kept for the composer, which grows as it is typed
-  // in.
+  // in: the view at the end moves with that room even while stay holds it, since the room is not the story.
   useLayoutEffect(() => {
     const element = scrollRef.current;
     const content = element?.firstElementChild;
     if (!element || !content) return;
+    const roomOf = () => parseFloat(getComputedStyle(content).paddingBottom);
+    let room = roomOf();
     // The view stays where the reader opened or closed a picture, off the end until it is at the end again.
     const leave = () => {
       stick.current = false;
       placed.current = null;
     };
     const observer = new ResizeObserver(() => {
+      const now = roomOf();
+      if (now !== room && stick.current) {
+        element.scrollTop += now - room;
+        placed.current = element.scrollTop;
+      }
+      room = now;
       toBottom();
-      onScroll();
+      settle(false);
     });
     observer.observe(content, { box: 'border-box' });
     element.addEventListener(READER_RESIZED, leave);
@@ -78,9 +87,11 @@ export function useFollow(count: number, streaming: boolean, anchor: string | nu
     };
   }, []);
 
-  function onScroll() {
+  // scrolled: a scroll event, not a size the story took.
+  function settle(scrolled: boolean) {
     const element = scrollRef.current!;
     if (element.scrollTop === placed.current) return;
+    if (!scrolled && held.current) return;
     placed.current = null;
     const bottom = atEnd(element.scrollHeight - element.scrollTop - element.clientHeight, stick.current);
     stick.current = bottom;
@@ -88,9 +99,11 @@ export function useFollow(count: number, streaming: boolean, anchor: string | nu
     if (bottom) setUnread(false);
   }
 
+  // Takes the view down itself: while stay holds it, the story growing leaves away unset, so no render would.
   function follow() {
     stick.current = true;
     held.current = false;
+    toBottom();
     setAway(false);
     setUnread(false);
   }
@@ -105,6 +118,8 @@ export function useFollow(count: number, streaming: boolean, anchor: string | nu
     stick.current = false;
     setSeek({ key, revision: Date.now(), lands });
   }
+
+  const onScroll = () => settle(true);
 
   const pill = !away ? null : streaming ? '생성 중' : unread ? '새 응답' : '맨 아래로';
 
