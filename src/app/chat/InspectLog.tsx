@@ -1,13 +1,15 @@
 import { useMemo, useState, useSyncExternalStore } from 'react';
+import { cacheShortfall } from '../../runtime/cache-diagnosis';
 import type { CallPurpose, LogEntry } from '../../runtime/request-log';
 import { describeReplyError } from '../common/failure';
 import { cacheShare, finish, seconds, tokens } from '../common/receipt';
 import { ago } from '../common/time';
 import { FEATURE_NAMES, ROLE_TAGS, SCRIPTS, STAGE_NAMES, TOOL, UNKNOWN } from '../common/words';
 import { useSession } from '../session';
-import { Button, Callout, Empty, List, ListItem, Section, Stack, Text } from '../ui';
+import { Button, Callout, Disclosure, Empty, List, ListItem, Section, Stack, Text } from '../ui';
+import { BrokenPartView, breakKind, firstCause, ShortfallNote } from './CacheDiagnosis';
 import { BROKEN, why } from './ChatCache';
-import { SentRequest, SentResponse } from './ChatSent';
+import { partName, SentRequest, SentResponse } from './ChatSent';
 
 const PAGE = 20;
 
@@ -69,6 +71,8 @@ function Row({ entry, open, onToggle }: { entry: LogEntry; open: boolean; onTogg
   const facts = [receipt.modelName, finish(receipt).value, seconds(receipt.totalMs), ...(entry.purpose === 'embedding' ? [] : [`첫 토큰 ${seconds(receipt.firstTextMs)}`])];
   const used = !usage ? [`사용량 ${UNKNOWN}`] : counted ? [`읽음 ${tokens(read)}`, `저장 ${tokens(written)}`, `그 외 ${tokens(input - read - (written ?? 0))}`, `출력 ${tokens(usage.outputTokens)}`] : [`입력 ${tokens(input)}`, `출력 ${tokens(usage.outputTokens)}`];
   const broken = receipt.forecast?.broken;
+  const short = cacheShortfall(receipt);
+  const parts = entry.diagnosis?.parts ?? [];
   return (
     <ListItem
       title={entry.agent ? `${entry.agent.name} · ${STAGE_NAMES[entry.agent.stage]} ${PURPOSES.agent}` : PURPOSES[entry.purpose]}
@@ -79,11 +83,23 @@ function Row({ entry, open, onToggle }: { entry: LogEntry; open: boolean; onTogg
       expanded={open}
       onClick={onToggle}
       detail={
-        (open || broken) && (
+        (open || broken || short?.short) && (
           <Stack gap="related">
-            {broken && <Text variant="note">{`${BROKEN}: ${why(broken, null)}`}</Text>}
+            {broken && <Text variant="note">{[`${BROKEN}: ${why(broken, null)}`, firstCause(entry.diagnosis)].filter(Boolean).join(' ')}</Text>}
+            {short?.short && <ShortfallNote shortfall={short} />}
             {open && (
               <>
+                {parts.length > 0 && (
+                  <Section level={3} title="깨진 곳">
+                    <Stack gap="related">
+                      {parts.map((part, index) => (
+                        <Disclosure key={index} label={`${partName(part.from, part.role)} · ${breakKind(part.kind)}`}>
+                          <BrokenPartView part={part} />
+                        </Disclosure>
+                      ))}
+                    </Stack>
+                  </Section>
+                )}
                 {receipt.state === 'failed' && receipt.error && <Callout tone="warn">{describeReplyError(receipt.error)}</Callout>}
                 <SentRequest entry={entry} receipt={receipt} />
                 <Section level={3} title="응답 원문">

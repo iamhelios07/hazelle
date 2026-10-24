@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { refOf } from '../../connectors/assignment';
 import { tokenGroups, type From, type TokenSource } from '../../engine/pipeline';
-import type { ForecastPart } from '../../runtime/cache';
+import type { ForecastPart } from '../../model/cache';
 import type { Rehearsal } from '../../runtime/script-preview';
 import { afterEnter, previewRequest, type AfterEnter, type Sending } from '../../runtime/turn-context';
 import { describeTurnFailure, runaway } from '../common/failure';
@@ -10,7 +10,8 @@ import { cost, tokens } from '../common/receipt';
 import { MODEL_SETTINGS, opens, PRE_READ, UNKNOWN } from '../common/words';
 import { useSession, useStore } from '../session';
 import { navigate } from '../shell/router';
-import { Callout, CodeBlock, Disclosure, Empty, Facts, Gauge, List, ListItem, Section, Stack, Text } from '../ui';
+import { Button, Callout, CodeBlock, Disclosure, Empty, Facts, Gauge, List, ListItem, Row, Section, Stack, Text } from '../ui';
+import { BrokenPartView, breakKind, diagnosed, firstCause, RecurrenceNote } from './CacheDiagnosis';
 import { BROKEN, profileName, reads, why } from './ChatCache';
 import { partName, RequestView } from './ChatSent';
 import { HookList, STAGES } from './InspectScripts';
@@ -41,7 +42,7 @@ export function NextRequest({ chat, sending, request, cache, editor, onEdit }: {
         <NextTokens sending={sending} />
       </Section>
       <Section title="캐시" help="지금 보내면 캐시를 얼마나 읽고 새로 저장할지 미리 계산해요. 토큰 수는 추정치예요.">
-        {cache.next ? <NextCache next={cache.next} editor={editor} onEdit={onEdit} /> : cache.next === null ? <Empty variant="section">계산할 캐시가 없어요.</Empty> : <Text variant="note">계산하는 중…</Text>}
+        {cache.next ? <NextCache next={cache.next} recurrence={cache.recurrence} editor={editor} onEdit={onEdit} /> : cache.next === null ? <Empty variant="section">계산할 캐시가 없어요.</Empty> : <Text variant="note">계산하는 중…</Text>}
       </Section>
       <RequestView
         level={2}
@@ -164,35 +165,36 @@ function NextTokens({ sending }: { sending: Sending }) {
 }
 
 const STATES: Record<ForecastPart['state'], string> = { read: '캐시에서 읽음', write: '새로 저장', tail: '캐시 밖' };
-const CHANGES = { changed: '달라짐', added: '추가됨' } as const;
-
-type CacheRow = { name: string; tokens: number; count: number } & Pick<ForecastPart, 'from' | 'state' | 'change' | 'point'>;
+type CacheRow = { name: string; tokens: number; count: number; at: number } & Pick<ForecastPart, 'from' | 'state' | 'change' | 'point'>;
 
 // Neighbours of one part, alike in how the cache takes them, read as one row; a point ends its row. A changed part is
 // a row of its own, so its from is the row's.
 function cacheRows(parts: ForecastPart[]): CacheRow[] {
   const out: CacheRow[] = [];
-  for (const part of parts) {
+  for (const [at, part] of parts.entries()) {
     const name = partName(part.from, part.role);
     const open = out.at(-1);
     if (open && !open.point && !open.change && !part.change && open.name === name && open.state === part.state) {
       open.tokens += part.tokens;
       open.count++;
       open.point = part.point;
-    } else out.push({ name, tokens: part.tokens, count: 1, from: part.from, state: part.state, change: part.change, point: part.point });
+    } else out.push({ name, tokens: part.tokens, count: 1, at, from: part.from, state: part.state, change: part.change, point: part.point });
   }
   return out;
 }
 
-type NextCacheProps = { next: NonNullable<CacheNotes['next']>; editor: (from: From) => Side | null; onEdit: (side: Side) => void };
+type NextCacheProps = { next: NonNullable<CacheNotes['next']>; recurrence: CacheNotes['recurrence']; editor: (from: From) => Side | null; onEdit: (side: Side) => void };
 
-function NextCache({ next: { forecast, cost: price, route }, editor, onEdit }: NextCacheProps) {
+function NextCache({ next: { forecast, diagnosis, cost: price, route }, recurrence, editor, onEdit }: NextCacheProps) {
   const store = useStore();
+  const [open, setOpen] = useState<string | null>(null);
+  const cause = firstCause(diagnosis);
   const { against, written, tail, removed } = forecast;
   const off = against?.broken?.kind === 'off' ? { label: opens(MODEL_SETTINGS), onClick: () => navigate({ kind: 'model', ...refOf(route.connection.id, route.model) }) } : undefined;
   return (
     <Stack gap="group">
-      {against?.broken && <Callout tone="warn" action={off}>{`${BROKEN}: ${why(against.broken, profileName(store, route))} ${reads(against)}`}</Callout>}
+      <RecurrenceNote recurrence={recurrence} />
+      {against?.broken && <Callout tone="warn" action={off}>{[`${BROKEN}: ${why(against.broken, profileName(store, route))}`, cause, reads(against)].filter(Boolean).join(' ')}</Callout>}
       <Facts
         variant="tiles"
         items={[
@@ -212,15 +214,21 @@ function NextCache({ next: { forecast, cost: price, route }, editor, onEdit }: N
       )}
       <List label="보낼 메시지">
         {cacheRows(forecast.parts).map((row, index) => {
+          const part = row.change && diagnosed(diagnosis, row.change, row.at);
           const side = row.change && editor(row.from);
+          const key = `part:${row.at}`;
           return (
             <ListItem
               key={index}
               title={row.count > 1 ? `${row.name} ${row.count}개` : row.name}
-              badge={row.change ? CHANGES[row.change] : undefined}
+              badge={row.change ? breakKind(row.change) : undefined}
               tags={[STATES[row.state], ...(row.point === 'cache' ? ['캐시 지점'] : row.point === 'short' ? ['캐시 지점 · 최소 크기 미만'] : [])]}
               note={tokens(row.tokens)}
-              onClick={side ? () => onEdit(side) : undefined}
+              {...(row.change && {
+                expanded: open === key,
+                onClick: () => setOpen(open === key ? null : key),
+                detail: open === key && <BrokenDetail part={part} pending={diagnosis === undefined} edit={side ? { label: opens(row.name), onClick: () => onEdit(side) } : null} />,
+              })}
             />
           );
         })}
@@ -228,11 +236,37 @@ function NextCache({ next: { forecast, cost: price, route }, editor, onEdit }: N
       {removed.length > 0 && (
         <Section level={3} title="빠지는 메시지">
           <List label="빠지는 메시지">
-            {removed.map((part, index) => (
-              <ListItem key={index} title={partName(part.from, part.role)} note={tokens(part.tokens)} />
-            ))}
+            {removed.map((part, index) => {
+              const key = `removed:${part.before}`;
+              return (
+                <ListItem
+                  key={index}
+                  title={partName(part.from, part.role)}
+                  note={tokens(part.tokens)}
+                  expanded={open === key}
+                  onClick={() => setOpen(open === key ? null : key)}
+                  detail={open === key && <BrokenDetail part={diagnosed(diagnosis, 'removed', part.before)} pending={diagnosis === undefined} edit={null} />}
+                />
+              );
+            })}
           </List>
         </Section>
+      )}
+    </Stack>
+  );
+}
+
+// pending: the diagnosis is still worked out; once done, a part it has nothing on has lost the last call's text.
+function BrokenDetail({ part, pending, edit }: { part: ReturnType<typeof diagnosed>; pending: boolean; edit: { label: string; onClick: () => void } | null }) {
+  return (
+    <Stack gap="related">
+      {part ? <BrokenPartView part={part} /> : <Text variant="note">{pending ? '살펴보는 중…' : '어떻게 바뀌었는지는 알 수 없어요.'}</Text>}
+      {edit && (
+        <Row kind="actions">
+          <Button variant="secondary" size="sm" onClick={edit.onClick}>
+            {edit.label}
+          </Button>
+        </Row>
       )}
     </Stack>
   );

@@ -110,6 +110,18 @@ const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scop
 const build = (over: Partial<PromptInput['scope']> = {}) => sentOf(assemble(input(over)));
 
 describe('assemble', () => {
+  it('keeps lazy CBS evidence only for a whole rendered part and preserves it only through an unchanged rewrite', () => {
+    const built = assembledOf(assemble(input()));
+    const part = built.parts[0]!;
+    expect(part.cbs).toMatchObject({ text: starter.blocks[0]!.kind === 'text' ? starter.blocks[0]!.text : '', rendered: built.messages[0]!.content, seed: 'reply-1:setting' });
+    const chat = built.parts.find(({ origin }) => origin === 'u1')!;
+    expect(chat.source).toBe('Is it safe?');
+    const kept = assembledOf(rewritten(built, built.messages, (text) => text.length, null));
+    expect(kept.parts[0]!.cbs).toEqual(part.cbs);
+    const edited = assembledOf(rewritten(built, [{ ...built.messages[0]!, content: 'script replacement' }, ...built.messages.slice(1)], (text) => text.length, null));
+    expect(edited.parts[0]!.cbs).toBeUndefined();
+  });
+
   it("builds the user's own prompt with a card's lorebook, regex, toggle and variables", () => {
     const entries = [
       lore('lighthouse', 'The lighthouse is old.', { constant: false, keys: ['lighthouse'] }),

@@ -8,7 +8,7 @@ import { Disclosure, Empty, Facts, List, ListItem, Stack, Text } from '../ui';
 
 const ATTACHED = { settings: '설정', prompt: '프롬프트', character: '캐릭터', persona: '페르소나' } as const;
 
-function silentReason(why: ModuleContribution['silent'][number]['why']): string {
+export function silentReason(why: ModuleContribution['silent'][number]['why']): string {
   if (why.kind === 'unmatched') return '키가 안 나와요';
   if (why.kind === 'keyless') return '키가 없어요';
   switch (why.cause) {

@@ -1,3 +1,4 @@
+import type { CacheComparison } from '../model/cache';
 import { afterEach, expect, it, vi } from 'vitest';
 import { display } from '../engine/display';
 import type { ChatScope } from '../engine/render';
@@ -288,4 +289,17 @@ it('returns provenance only for an explicitly requested variables job', async ()
     expect(inspected.variables[0]!.history.map(({ writer, value }) => [writer.kind, value])).toEqual([['chat', '0'], ['cbs', '1'], ['pending', '2']]);
     expect(inspected.variables[0]!.last.value).toBe('2');
   } finally { evaluation.close(); }
+});
+
+it('runs diagnosis on one disposable worker lane and aborts it with the forecast controller', async () => {
+  const { workers } = fakeWorkers();
+  const evaluation = new Evaluation(none);
+  const controller = new AbortController();
+  const input: CacheComparison = { forecast: { parts: [], removed: [], written: 0, tail: 0, against: { read: 0, of: 10, broken: { kind: 'expired' } } }, before: null, after: { prompt: { messages: [], parts: [], lore: null, silent: null, invalidKeys: [], loreBudget: 0, memory: null, dropped: 0, problems: { found: [], omitted: 0 } }, wire: [] } };
+  const diagnosis = evaluation.cacheDiagnosis('c', scope, input, controller.signal);
+  expect(workers[0]!.posted.filter((data) => 'input' in data).map(({ input }) => 'job' in input && input.job.kind)).toEqual(['cache-diagnosis']);
+  controller.abort();
+  await expect(diagnosis).rejects.toBeInstanceOf(EvaluationStopped);
+  expect(workers[0]!.posted.some((message) => 'forget' in message)).toBe(true);
+  evaluation.close();
 });

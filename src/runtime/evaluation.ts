@@ -1,3 +1,4 @@
+import type { CacheComparison, CacheDiagnosis } from '../model/cache';
 import { Runaway } from '../engine/cbs/evaluate';
 import type { DisplayPatch } from '../engine/display';
 import type { RegexScript } from '../engine/import/types';
@@ -50,6 +51,7 @@ const GATES = {
   screen: 'display',
   headless: 'display',
   forecast: 'passive',
+  'cache-diagnosis': 'passive',
   memory: 'passive',
   view: 'passive',
   'auto-translation': 'passive',
@@ -106,6 +108,10 @@ export class Evaluation {
   prompt(lane: Lane<'send' | 'forecast' | 'memory' | 'view'>, input: Omit<PromptInput, 'countTokens'>, signal?: AbortSignal): Promise<EvaluatedPrompt> {
     const { scope, ...rest } = input;
     return this.run(keyOf(lane), onChat(lane), scope, { kind: 'prompt', input: rest }, signal) as Promise<EvaluatedPrompt>;
+  }
+
+  cacheDiagnosis(chat: string, scope: ChatScope, input: CacheComparison, signal?: AbortSignal): Promise<CacheDiagnosis> {
+    return this.once('cache-diagnosis', onChat({ asker: 'cache-diagnosis', chat }), scope, { kind: 'cache-diagnosis', input }, signal) as Promise<CacheDiagnosis>;
   }
 
   rewrite(lane: Lane<'send'>, scope: ChatScope, input: Omit<Extract<EvaluationJob, { kind: 'rewrite' }>, 'kind'>, signal?: AbortSignal): Promise<EvaluatedPrompt> {

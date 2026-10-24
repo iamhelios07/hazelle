@@ -1,3 +1,5 @@
+import { cacheDiagnosis } from '../engine/cache-diagnosis';
+import type { CacheComparison, CacheDiagnosis } from '../model/cache';
 import { rewritten, type ProviderFit } from '../engine/prompt-budget';
 import type { CbsTrace } from '../engine/cbs/evaluate';
 import { DisplayPass, type Display, type DisplayPatch, type DisplayWork } from '../engine/display';
@@ -13,6 +15,7 @@ import { tokenizer } from './tokenizer';
 type LuaText = { text: string; stamp: string; shown: string };
 const stamped = (generation: number, stamp: string) => `${generation}/${stamp}`;
 export type EvaluationJob =
+  | { kind: 'cache-diagnosis'; input: CacheComparison }
   | { kind: 'display'; take: ReadonlySet<number>; lua?: { generation: number; revision: number; waits: boolean } }
   | { kind: 'prompt'; input: Omit<PromptInput, 'scope' | 'countTokens'> }
   | { kind: 'rewrite'; prompt: Assembled; messages: Parameters<typeof rewritten>[1]; fit: ProviderFit | null }
@@ -42,6 +45,7 @@ export type ChatTexts = { texts: string[]; tokens: number[]; standing: Standing 
 // staged: each message past its input or output stage (renderChat), which a Risu chat file holds.
 export type ToolState = { texts: string[]; staged: string[]; variables: [string, string][]; wrote: [string, string][][] };
 export type EvaluationResult =
+  | CacheDiagnosis
   | ToolState
   | VariableInspection
   | DisplayEvaluation
@@ -99,6 +103,10 @@ export class Evaluator {
     const messages = applyTail(this.histories.get(lane) ?? [], history);
     this.histories.set(lane, messages);
     const scope: ChatScope = { ...data, messages };
+    if (job.kind === 'cache-diagnosis') {
+      started();
+      return cacheDiagnosis(job.input, scope);
+    }
     if (job.kind === 'variables') {
       started();
       return inspectVariables(scope, job.prefix);

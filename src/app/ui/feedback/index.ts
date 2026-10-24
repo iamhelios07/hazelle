@@ -13,4 +13,5 @@ export { Outcome } from './Outcome';
 export { Progress, type ProgressStep } from './Progress';
 export { Sketch } from './Sketch';
 export { Steps } from './Steps';
+export { TextDiff, type DiffRun } from './TextDiff';
 export { TourCard } from './TourCard';

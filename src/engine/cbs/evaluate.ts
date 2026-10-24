@@ -88,6 +88,7 @@ export type CbsStep = {
   headEnd?: number;
   depth: number;
   result: string;
+  truncated?: true;
   // Why it stayed as written: no tag or block of that name, one Hazelle does not run, or arguments it cannot read.
   kept?: 'unknown' | 'unsupported' | 'args';
   // {{bkspc}} and {{erase}}, which change the text before them and give none.
@@ -169,10 +170,16 @@ function evaluateNodes(nodes: Node[], frame: Frame): string {
       piece = typeof node === 'string' ? node : node.kind === 'tag' ? evaluateTag(node, frame, step) : node.kind === 'block' ? evaluateBlock(node, frame, step) : legacy(node, frame, step);
     } catch (error) {
       // {{return}} ends the text with its value, which each step it leaves through gave.
-      if (step && error instanceof Return) step.result = error.value.slice(0, MOST_RESULT);
+      if (step && error instanceof Return) {
+        step.result = error.value.slice(0, MOST_RESULT);
+        if (error.value.length > MOST_RESULT) step.truncated = true;
+      }
       throw error;
     }
-    if (step && typeof piece === 'string') step.result = piece.slice(0, MOST_RESULT);
+    if (step && typeof piece === 'string') {
+      step.result = piece.slice(0, MOST_RESULT);
+      if (piece.length > MOST_RESULT) step.truncated = true;
+    }
     else if (step) step.erased = true;
     if (typeof node !== 'string') spent.tags++;
     if (typeof piece === 'string') spent.chars += piece.length;

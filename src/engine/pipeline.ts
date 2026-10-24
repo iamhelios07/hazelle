@@ -1,3 +1,4 @@
+import type { CacheRender } from '../model/cache';
 import type { TokenEstimate, TokenFit } from '../model/token-calibration';
 import { cachePoints, type CachePart, type Sent } from './cache-points';
 import { fitChat, remembered, type ChatSent, type ProviderFit, type Part, type TooLong } from './prompt-budget';
@@ -59,9 +60,9 @@ function stoppable<T>(build: () => T): T | RanAway {
 // A text written after the chat's messages, read with the variables they leave, as a prompt's text is (lay).
 // source: a message's own when the text stands for that message, the only place setvar writes. language: what
 // {{language}} reads, which only a translation's prompt sets. trace, when given, gets the steps, unescaped as the text is.
-export const renderAfter = (scope: ChatScope, text: string, source: CbsContext['source'], language: string | null = null, trace: CbsTrace | null = null): string | RanAway =>
+export const renderAfter = (scope: ChatScope, text: string, source: CbsContext['source'], language: string | null = null, trace: CbsTrace | null = null, variables?: ReadonlyMap<string, string>): string | RanAway =>
   stoppable(() => {
-    const out = unescapeCbs(evaluate(text, contexts(scope, 'prompt', language, '', null)(source, new Map(renderChat('prompt', scope).variables)), trace));
+    const out = unescapeCbs(evaluate(text, contexts(scope, 'prompt', language, '', null)(source, new Map(variables ?? renderChat('prompt', scope).variables)), trace));
     for (const step of trace?.steps ?? []) step.result = unescapeCbs(step.result);
     return out;
   });
@@ -86,8 +87,8 @@ export type From =
 // tokenizer. lore is every entry that fired, named as it was then; null for a chat with no card and no lore. invalidKeys: regex keys that
 // did not compile (design.md row 2: never match, listed). loreBudget: the 로어북 최대 분량 the activation was held to. memory: null while the
 // chat's memory is off. dropped: the chat's messages the budget left out, oldest first. problems: the first MOST_PROBLEMS
-// found, and how many more there were.
-export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string }[]; lore: (Fired & { name: string })[] | null; silent: (Silent & { name: string })[] | null; invalidKeys: { entry: string; name: string; key: string }[]; loreBudget: number; memory: MemorySent | null; dropped: number; problems: { found: Problem[]; omitted: number } };
+// found, and how many more there were. source is the chat/memory text before rendering; cbs proves a whole-part render.
+export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string; source?: string; cbs?: CacheRender }[]; lore: (Fired & { name: string })[] | null; silent: (Silent & { name: string })[] | null; invalidKeys: { entry: string; name: string; key: string }[]; loreBudget: number; memory: MemorySent | null; dropped: number; problems: { found: Problem[]; omitted: number } };
 
 // What went wrong in a text outside the chat's messages the request was built from, at the block or entry it was rendered
 // for, once per text: from may match no part, when that text rendered to nothing and was left out. An error text counts
@@ -117,6 +118,7 @@ type Laid = {
   // By the place of each text rendered through render or entry, as last rendered there; never a lore entry counted
   // only for activation.
   problems: Map<string, CbsProblem[]>;
+  rendered: Map<string, CacheRender>;
 };
 
 function lay(scope: ChatScope, blocks: Block[], history: HistoryMessage[], variables: Map<string, string>, seed: string, tokens: (text: string) => number, language: string | null): Laid {
@@ -176,8 +178,11 @@ function lay(scope: ChatScope, blocks: Block[], history: HistoryMessage[], varia
   }
 
   const problems = new Map<string, CbsProblem[]>();
+  const renders = new Map<string, CacheRender>();
   const placed = (text: string, place: string, cast?: string) => {
-    const now = rendered(atPositions(text, positions), place, cast);
+    const source = atPositions(text, positions);
+    const now = rendered(source, place, cast);
+    renders.set(place, { text: source, rendered: now.out, seed: `${seed}:${place}`, ...(cast !== undefined && { cast }) });
     problems.set(place, now.problems);
     return now.out;
   };
@@ -194,6 +199,7 @@ function lay(scope: ChatScope, blocks: Block[], history: HistoryMessage[], varia
     entry: (id, body) => placed(body, id, owners.get(id)),
     named: (id) => names.get(id)!,
     problems,
+    rendered: renders,
   };
 }
 
@@ -379,11 +385,16 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, answe
   const lastUser = messages.findLastIndex(({ message }) => message.role === 'user');
   const retrieved = found && lastUser !== -1 ? found : null;
   if (retrieved) atDepth.push({ depth: messages.length - lastUser, sent: { message: { role: 'user', content: retrieved.text }, from: { kind: 'retrieval' } } });
+  const sources = new Map(scope.messages.map(({ message, text }) => [message, text]));
   const assembled = (parts: (Sent | CachePart)[], dropped: number): Assembled => {
     const sent = cachePoints(parts);
     return {
       messages: sent.map(({ message }) => message),
-      parts: sent.map(({ message, from, origin }) => ({ from, tokens: tokens(message.content), ...(origin !== undefined && { origin }) })),
+      parts: sent.map(({ message, from, origin }) => {
+        const cbs = 'id' in from && from.id ? laid.rendered.get(from.id) : undefined;
+        const source = from.kind === 'block' && from.slot === 'chat' ? origin === undefined ? undefined : sources.get(origin) : from.kind === 'block' && from.slot === 'memory' ? told?.text ?? recalled?.text : undefined;
+        return { from, tokens: tokens(message.content), ...(origin !== undefined && { origin }), ...(source !== undefined && { source }), ...(cbs?.rendered === message.content && { cbs }) };
+      }),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
       silent: activation && activation.silent.map((silent) => ({ ...silent, name: named(silent.id) })),
       invalidKeys: activation ? activation.invalidKeys.map((invalid) => ({ ...invalid, name: named(invalid.entry) })) : [],

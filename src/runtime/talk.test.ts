@@ -240,6 +240,33 @@ describe('Talk', () => {
       expect(session.log.entry(chat, call)).toBeNull();
     }));
 
+  it('attaches the sent wire and an asynchronous break diagnosis, without diagnosing an intact send', () =>
+    server.withSession(async (session) => {
+      await answerable(session);
+      await session.store.update('profile', FIRST_PROFILE_ID, (current) => ({ ...current, settings: { cache: '5m' } }));
+      const chat = await chatSaid(session);
+      const usage = { prompt_tokens: 100, completion_tokens: 5, prompt_tokens_details: { cached_tokens: 40, cache_write_tokens: 50 } };
+      stubRelay(() => new Response(`data: ${JSON.stringify({ choices: [{ delta: { content: 'reply' }, finish_reason: 'stop' }], usage })}\n\ndata: [DONE]\n\n`, { headers: { [RELAY_HEADER]: 'upstream' } }));
+      const run = session.store.evaluation.cacheDiagnosis.bind(session.store.evaluation);
+      let finish!: () => void;
+      const waiting = new Promise<void>((resolve) => { finish = resolve; });
+      const diagnose = vi.spyOn(session.store.evaluation, 'cacheDiagnosis').mockImplementation(async (...args) => { await waiting; return run(...args); });
+      await takeTurn(session, chat, { kind: 'answer' });
+      await takeTurn(session, chat, { kind: 'answer' });
+      expect(diagnose).not.toHaveBeenCalled();
+      const first = replies(session, chat).at(-1)!.receipt!;
+      const old = session.log.entry(chat, first.id)!;
+      expect(old.wire?.some(({ content }) => content === '안녕')).toBe(true);
+      await editMessage(session.store, chat, fold(session.store.children('entry', chat))[0]!, 'changed message', null);
+      await takeTurn(session, chat, { kind: 'answer' });
+      const last = replies(session, chat).at(-1)!.receipt!;
+      expect(session.log.entry(chat, last.id)?.diagnosis).toBeUndefined();
+      finish();
+      await vi.waitFor(() => expect(session.log.entry(chat, last.id)?.diagnosis).toMatchObject({ missing: 0, parts: expect.arrayContaining([expect.objectContaining({ kind: 'changed', causes: [{ kind: 'edited' }] })]) }));
+      expect(diagnose).toHaveBeenCalledTimes(1);
+      expect(old.wire?.some(({ content }) => content === '안녕')).toBe(true);
+    }));
+
   it('keeps on each receipt what its send expected from the cache, and stores the call so a forecast survives a reload', () =>
     server.withSession(async (session) => {
       await answerable(session);

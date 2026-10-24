@@ -1,0 +1,42 @@
+.diff {
+  margin: 0;
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.before,
+.after {
+  padding: 0 var(--space-2);
+  border-radius: var(--space-2);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.before {
+  background: var(--color-diff-before);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-warn);
+}
+
+.after {
+  background: var(--color-diff-after);
+}
+
+.fold {
+  display: inline;
+  padding: 0 var(--space-4);
+  border-radius: var(--space-2);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font: inherit;
+}
+
+.fold:hover {
+  color: var(--color-text);
+}

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { CacheDiagnosis, CacheRecurrence, Forecast } from '../../model/cache';
+import { cacheRecurrence, diagnoseCache, needsDiagnosis } from '../../runtime/cache-diagnosis';
 import type { Chat } from '../../model/chat';
 import type { Memory } from '../../model/memory';
 import type { Route } from '../../runtime/assignment';
-import { breakCost, forecast, lastCache, prior, type Forecast } from '../../runtime/cache';
+import { breakCost, forecast, lastCache, prior } from '../../runtime/cache';
 import { leaving } from '../../runtime/memory-view';
 import type { Shown } from '../../runtime/talk';
 import type { SentRequest } from '../../runtime/request-log';
@@ -15,8 +17,9 @@ export type SendNotes = { cache: CacheNotes; leaving: number | null; sending: Se
 
 // until: when the last call's cache runs out, null when it cached nothing. next: the draft's forecast against the
 // chat's stored last call (runtime/cache), with what a break costs where the model is priced and the model it was worked
-// out for; undefined until it is worked out after the chat opens or a reply ends.
-export type CacheNotes = { until: number | null; next: { forecast: Forecast; cost: ReturnType<typeof breakCost>; route: Route } | null | undefined };
+// out for; undefined until it is worked out after the chat opens or a reply ends. recurrence: the chat's recent replies'
+// stored forecasts.
+export type CacheNotes = { until: number | null; recurrence: CacheRecurrence; next: { forecast: Forecast; diagnosis: CacheDiagnosis | null | undefined; cost: ReturnType<typeof breakCost>; route: Route } | null | undefined };
 
 // The draft is read again after any store change settles, so an edit to the prompt, a lorebook or the model shows in
 // the forecast while it is open. unsaved: a new chat not saved yet, forecast as its first save will write it.
@@ -51,7 +54,13 @@ export function useSendNotes(id: string, unsaved: Unsaved | null, chat: Chat, me
         const send = sending && cacheSend(sending, session.credentials.pool.peek(sending.turn.route.connection.value)?.id ?? null);
         const before = session.store.scopeState(id) === 'loaded' ? prior(session.store, id, messages, Date.now()) : null;
         const made = send && forecast(before, send);
-        setNext(made ? { forecast: made, cost: breakCost(sending.turn.route.connection.value, sending.turn.route.model, made), route: sending.turn.route } : null);
+        if (!made || !sending || !send) return setNext(null);
+        const pending = needsDiagnosis(made);
+        const next = { forecast: made, diagnosis: pending ? undefined : null, cost: breakCost(sending.turn.route.connection.value, sending.turn.route.model, made), route: sending.turn.route };
+        setNext(next);
+        if (pending) void diagnoseCache(session.store.evaluation, id, sending.turn.scope, made, before ? session.log.entry(id, before.print.call) : null, sending.prompt, send.wire, controller.signal).then((diagnosis) => {
+          if (!controller.signal.aborted) setNext({ ...next, diagnosis });
+        });
       }, () => {
         if (controller.signal.aborted) return;
         setNext(null);
@@ -65,7 +74,8 @@ export function useSendNotes(id: string, unsaved: Unsaved | null, chat: Chat, me
     };
   }, [id, unsaved, chat, messages, memory, text, busy, changes]);
 
-  const cache = useMemo((): CacheNotes => ({ until: last?.until ?? null, next }), [last, next]);
+  const recurrence = useMemo(() => cacheRecurrence(messages), [messages]);
+  const cache = useMemo((): CacheNotes => ({ until: last?.until ?? null, recurrence, next }), [last, recurrence, next]);
   const request = useMemo(() => {
     let wire: SentRequest | null | undefined;
     return () => {

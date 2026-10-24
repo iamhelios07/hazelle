@@ -6,6 +6,7 @@ import { tokens } from '../common/receipt';
 import { MODEL_SETTINGS } from '../common/words';
 import { useStore } from '../session';
 import { SendNote } from '../ui';
+import { firstCause } from './CacheDiagnosis';
 import { partName } from './ChatSent';
 import type { CacheNotes } from './useSendNotes';
 
@@ -27,6 +28,8 @@ export function why(broken: CacheBreak, profile: string | null): string {
       return '캐시 유지 시간이 지났어요.';
     case 'far':
       return '새 캐시 위치가 직전 캐시와 너무 멀어서 찾지 못했어요.';
+    case 'moved':
+      return `'${partName(broken.from, broken.role)}' 부분이 직전 요청과 다른 자리에 들어가요.`;
     case 'changed':
       return broken.from.kind === 'block' && broken.from.slot === 'chat' ? '직전에 보낸 메시지가 수정됐어요.' : `'${partName(broken.from, broken.role)}' 부분이 직전 요청과 달라요.`;
     case 'removed':
@@ -71,5 +74,5 @@ export function ChatCache({ cache, onOpen }: { cache: CacheNotes; onOpen: () => 
   if (cache.until === null || now >= cache.until) return null;
   const { next } = cache;
   const against = next?.forecast.against;
-  return <SendNote label={clock(cache.until - now)} title={TITLE} warning={next && against?.broken ? { words: BROKEN, why: `${why(against.broken, profileName(store, next.route))} ${reads(against)}` } : undefined} onClick={onOpen} />;
+  return <SendNote label={clock(cache.until - now)} title={TITLE} warning={next && against?.broken ? { words: BROKEN, why: [why(against.broken, profileName(store, next.route)), firstCause(next.diagnosis), reads(against)].filter(Boolean).join(' ') } : undefined} onClick={onOpen} />;
 }

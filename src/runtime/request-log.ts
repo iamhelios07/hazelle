@@ -1,7 +1,7 @@
 import { ChangeSignal } from '../change-signal';
 import type { Connection, HttpRequest } from '../connectors/types';
 import type { Assembled } from '../engine/pipeline';
-import type { CacheForecast } from '../model/cache';
+import type { CacheDiagnosis, CacheForecast, CacheText } from '../model/cache';
 import type { Receipt } from '../model/chat';
 import type { AgentStage } from '../model/prompt';
 import type { Stream } from '../model/stream';
@@ -21,12 +21,12 @@ export type LoggedAgent = { name: string; stage: AgentStage; sent: Pick<Assemble
 
 // One model call this page made or picked up. picked: picked up after a reload, so its request and response were
 // never read here; request is null too for a call refused before it was built. prompt: a chat reply's, agent an
-// agent's (attach).
-export type LogEntry = Omit<Logged, 'call'> & { at: number; picked: boolean; receipt: Receipt; request: SentRequest | null; response: string | null; prompt?: Assembled; agent?: LoggedAgent };
+// agent's (attach). diagnosis is undefined only while queued/running, null when unavailable or unneeded.
+export type LogEntry = Omit<Logged, 'call'> & { at: number; picked: boolean; receipt: Receipt; request: SentRequest | null; response: string | null; prompt?: Assembled; agent?: LoggedAgent; wire?: CacheText; diagnosis?: CacheDiagnosis | null };
 
 export type ChatLog = { entries: readonly LogEntry[]; omitted: number };
 
-// Per chat; characters count request bodies and responses, the bulk of an entry. The newest entry always stays, so the
+// Per chat; characters count request bodies, responses and attached prompt/diagnosis text. The newest entry always stays, so the
 // reply just made keeps its 요청 원문 however large it is.
 export const REQUEST_LOG_LIMITS = { entries: 100, characters: 8_000_000 } as const;
 const EMPTY: ChatLog = { entries: [], omitted: 0 };
@@ -56,7 +56,8 @@ export function redacted(request: SentRequest, connection: Connection): SentRequ
   return { url: hide(changed ? url.href : request.url), body: request.body === null ? null : hide(request.body) };
 }
 
-const size = ({ request, response }: LogEntry) => (request?.body?.length ?? 0) + (response?.length ?? 0);
+const charactersOf = (value: unknown): number => typeof value === 'string' ? value.length : value && typeof value === 'object' ? Object.values(value).reduce<number>((sum, each) => sum + charactersOf(each), 0) : 0;
+const size = ({ request, response, prompt, agent, wire, diagnosis }: LogEntry) => (request?.body?.length ?? 0) + (response?.length ?? 0) + charactersOf({ prompt, agent, wire, diagnosis });
 
 // Every model call this page makes, in page memory only (ruling: nothing here is stored or survives a reload). A
 // chat's entries go when its scope is released, as what a reply sent always did; a likeness's (chat null) on close.
@@ -85,6 +86,7 @@ export class RequestLog {
   }
 
   record(entry: LogEntry) {
+    entry = { ...entry, diagnosis: entry.diagnosis ?? null };
     const held = this.chats.get(entry.chat) ?? { log: EMPTY, characters: 0 };
     const entries = [...held.log.entries, entry];
     let { omitted } = held.log;
@@ -98,12 +100,21 @@ export class RequestLog {
   }
 
   // forecast: what the send expected of the cache, as its receipt keeps it.
-  attach(chat: string, call: string, { prompt, forecast, agent }: { prompt?: Assembled; forecast?: CacheForecast; agent?: LoggedAgent }) {
+  attach(chat: string, call: string, attachment: { prompt?: Assembled; forecast?: CacheForecast; agent?: LoggedAgent; wire?: CacheText; diagnosis?: CacheDiagnosis | null }) {
+    const { prompt, forecast, agent, wire, diagnosis } = attachment;
     const held = this.chats.get(chat);
     const at = held?.log.entries.findIndex((entry) => entry.receipt.id === call) ?? -1;
     if (!held || at === -1) return;
     const entry = held.log.entries[at]!;
-    held.log = { ...held.log, entries: held.log.entries.with(at, { ...entry, ...(prompt && { prompt }), ...(agent && { agent }), ...(forecast && { receipt: { ...entry.receipt, forecast } }) }) };
+    const next = { ...entry, ...(prompt && { prompt }), ...(agent && { agent }), ...(wire && { wire }), ...('diagnosis' in attachment && { diagnosis }), ...(forecast && { receipt: { ...entry.receipt, forecast } }) };
+    const entries = held.log.entries.with(at, next);
+    held.characters += size(next) - size(entry);
+    let { omitted } = held.log;
+    while (entries.length > 1 && held.characters > REQUEST_LOG_LIMITS.characters) {
+      held.characters -= size(entries.shift()!);
+      omitted++;
+    }
+    held.log = { entries, omitted };
     this.changes.notify();
   }
 

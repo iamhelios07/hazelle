@@ -1,3 +1,4 @@
+import type { CacheText } from '../model/cache';
 import { SETTINGS_ID } from '../model/settings';
 import { chatToggles } from '../model/toggles';
 import type { Toggle } from '../model/prompt';
@@ -15,7 +16,7 @@ import type { ChatScope } from '../engine/render';
 import { shown, type Chat, type Message } from '../model/chat';
 import { live } from '../model/library';
 import { chatModel, type RouteFailure } from './assignment';
-import { wireOf, type CacheSend } from './cache';
+import { wireOf, wireTextOf, type CacheSend } from './cache';
 import { answerInstructionOf, asSent, budgetOf, packsOf, tokenLimits, scopeOf, sentSettings } from './chat-context';
 import type { Said } from './chat-log';
 import { cacheViewOf } from './generate';
@@ -146,12 +147,12 @@ export async function forecastSend(session: Forecaster, chat: string, target: Ta
 }
 
 // account: the account that would serve it (runtime/pool peek).
-export function cacheSend({ turn, prompt, calibration }: Sending, account: string | null): CacheSend | null {
+export function cacheSend({ turn, prompt, calibration }: Sending, account: string | null): (CacheSend & { wire: CacheText }) | null {
   const view = cacheViewOf(turn.route.connection.value, turn.route.model, turn.settings, prompt.messages);
   if (!view) return null;
   // Prefix composition can differ from the whole request; this remains a lower-bound forecast, not reported eligibility.
   const facts = view.facts && { ...view.facts, minimum: view.facts.minimum === null ? null : Math.ceil(view.facts.minimum / calibration.estimate.lower) };
-  return { ...wireOf(turn.route.connection.id, account, view, prompt.parts), facts };
+  return { ...wireOf(turn.route.connection.id, account, view, prompt.parts), facts, wire: wireTextOf(view) };
 }
 
 // Preparation shares sending's cache-point selection with cacheSend; headers never leave this helper.

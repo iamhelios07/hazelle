@@ -2,6 +2,7 @@ import { providerFit } from './token-calibration';
 import { answerInstructionOf, translationInput, tokenLimits, sentSettings } from './chat-context';
 import { cacheSend, gatherTurn, type Target, type Blocked, type TurnContext } from './turn-context';
 import { forecast, prior } from './cache';
+import { diagnoseCache, needsDiagnosis } from './cache-diagnosis';
 import type { RanAway } from '../engine/pipeline';
 import type { TooLong } from '../engine/prompt-budget';
 import { fold, shown, type Chat } from '../model/chat';
@@ -214,14 +215,17 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const sent = shortened.prompt;
   const before = [...(reply.before ?? []), ...requested.writes];
   const send = cacheSend({ turn, prompt: sent, calibration }, session.credentials.pool.peek(route.connection.value)?.id ?? null);
-  const against = send && forecast(prior(session.store, chat, session.read.chat(chat).snapshot()!.messages, Date.now()), send)?.against;
+  const last = prior(session.store, chat, session.read.chat(chat).snapshot()!.messages, Date.now());
+  const predicted = send && forecast(last, send);
+  const against = predicted?.against;
+  const diagnose: Ask['diagnose'] = predicted && needsDiagnosis(predicted) ? (prompt, wire) => diagnoseCache(session.store.evaluation, chat, scope, predicted, last ? session.log.entry(chat, last.print.call) : null, prompt, wire) : undefined;
   const refit: Ask['refit'] = async (refusal, measurement) => {
     const decision = calibration.refused(refusal, measurement);
     if (!decision) return null;
     const fitted = await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt: sent, messages: sent.messages, fit: { ...fit, allowance: decision.allowance } }, signal));
     return 'kind' in fitted ? null : { prompt: fitted, fit: decision, retries: [...calibration.retries] };
   };
-  return { route, settings, prompt: sent, calibration: { fit: calibration.fit, retries: [] }, refit, said, ...(before.length > 0 && { before }), ...(against && { forecast: against }), ...(shortened.preread && { preread: shortened.preread }), ...(agents.runs.length > 0 && { agents: agents.runs }) };
+  return { route, settings, prompt: sent, ...(diagnose && { diagnose }), calibration: { fit: calibration.fit, retries: [] }, refit, said, ...(before.length > 0 && { before }), ...(against && { forecast: against }), ...(shortened.preread && { preread: shortened.preread }), ...(agents.runs.length > 0 && { agents: agents.runs }) };
 }
 
 // The reply's message's other versions, the one it takes the place of first, are where its pre notes are found again.

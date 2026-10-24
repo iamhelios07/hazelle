@@ -1,5 +1,6 @@
 import type { ModelSettings } from '../connectors/settings';
-import type { From } from '../engine/pipeline';
+import type { Fired, Silent } from '../engine/lorebook/activate';
+import type { Assembled, From } from '../engine/pipeline';
 import { inverted } from './memory';
 import type { Role } from './prompt';
 
@@ -20,10 +21,10 @@ export type CachePrint = {
 };
 
 // Why a send reads less than the last call cached. expired: the last call's TTL ran out. far: the next point lies
-// past the provider's lookback from the last point it could read. changed, added, removed: a message of the prompt.
+// past the provider's lookback from the last point it could read. changed, added, removed, moved: a message of the prompt.
 export type CacheBreak =
   | { kind: 'model' | 'account' | 'reasoning' | 'off' | 'expired' | 'far' }
-  | { kind: 'changed' | 'added' | 'removed'; from: From; role: Role };
+  | { kind: 'changed' | 'added' | 'removed' | 'moved'; from: From; role: Role };
 
 // read: the tokens the send would read from the cache, of all the last call cached up to its last point. broken: the
 // first reason in wire order, null when it reads all of it. Kept on the send's receipt (model/chat Receipt forecast).
@@ -31,3 +32,46 @@ export type CacheForecast = { read: number; of: number; broken: CacheBreak | nul
 
 // The chat's id with its second group's hex digits inverted, as memoryId inverts the first and vectorsId the last.
 export const cachePrintId = (chat: string) => chat.replace(/^([0-9a-f]{8}-)([0-9a-f]{4})/, (_, head: string, group: string) => head + inverted(group));
+
+// Each message of the next send in wire order. read: the cache reads it. write: the send caches it for the next.
+// tail: after the last point that caches, sent at the full price every time. change: how it differs from the last call.
+// point: a point ends it, short when the prompt up to it is under the model's minimum and caches nothing.
+// before: the paired old wire position for a change, null for an addition or an unchanged part.
+export type ForecastPart = { role: Role; from: From; tokens: number; state: 'read' | 'write' | 'tail'; change: 'changed' | 'added' | 'moved' | null; before: number | null; point: 'cache' | 'short' | null };
+// against: compared with the last call, null without one. removed: what the last call sent and the next does not.
+// written: tokens the send caches anew; tail: those after its last caching point.
+export type Forecast = {
+  parts: ForecastPart[];
+  removed: { role: Role; from: From; tokens: number; before: number }[];
+  written: number;
+  tail: number;
+  against: CacheForecast | null;
+};
+
+// coarse keeps the complete differing middle, without claiming its internal alignment.
+export type CacheDiff = { runs: { kind: 'same' | 'before' | 'after'; text: string }[]; coarse: boolean };
+export type CacheCause =
+  | { kind: 'tag'; tag: string; before: string; after: string }
+  | { kind: 'lore'; id: string; name: string; before: CacheLore | null; after: CacheLore | null }
+  | { kind: 'moved'; before: number; after: number; depth: number | null }
+  | { kind: 'hoisted'; wire: number; prompt: number }
+  | { kind: 'edited' | 'memory' | 'unknown' };
+export type CacheLore = { fired: true; why: Fired['why'] } | { fired: false; why: Silent['why'] };
+// Positions address wire order. A null diff lacks text; an empty causes list lacks even a provable cause.
+// unknown is reserved for text we compared but cannot attribute. missing counts the null diffs.
+export type CacheDiagnosis = {
+  parts: { kind: 'changed' | 'added' | 'removed' | 'moved'; from: From; role: Role; before: number | null; after: number | null; diff: CacheDiff | null; causes: CacheCause[] }[];
+  missing: number;
+};
+// The latest ten distinct reply calls: considered have forecasts, missing do not. Only the first break was stored.
+export type CacheRecurrence = { considered: number; missing: number; broken: number; causes: { cause: CacheBreak; count: number }[] };
+// expected is calibrated to native counts when ratio is known; otherwise it remains the o200k estimate.
+export type CacheShortfall = { expected: number; actual: number; ratio: number | null; short: boolean };
+
+// Page memory only, alongside the request log; index is the prompt position, not the wire position.
+export type CacheText = { content: string; index: number }[];
+
+export type CacheComparison = { forecast: Forecast; before: { prompt?: Assembled; wire?: CacheText } | null; after: { prompt: Assembled; wire: CacheText } };
+
+// No trace is kept per send. A diagnosis replays this source and must match rendered to the actual wire text.
+export type CacheRender = { text: string; rendered: string; seed: string; cast?: string };

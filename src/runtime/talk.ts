@@ -8,14 +8,14 @@ import type { InlineThoughts } from '../connectors/stream';
 import type { Phase } from '../connectors/types';
 import type { Assembled } from '../engine/pipeline';
 import type { Settle } from './preread';
-import type { CacheForecast } from '../model/cache';
+import type { CacheDiagnosis, CacheForecast, CacheText } from '../model/cache';
 import type { AgentRun, Message, Receipt, Writes } from '../model/chat';
 import { without } from '../model/fields';
 import type { Stored } from '../model/kinds';
 import type { Stream } from '../model/stream';
 import type { ApiFailure } from './api';
 import type { Route, RouteFailure } from './assignment';
-import { cacheKept, wireOf, writePrint } from './cache';
+import { cacheKept, wireOf, wireTextOf, writePrint } from './cache';
 import { appendReply, appendUserMessage, savedElsewhere, type Said, type Written } from './chat-log';
 import { retriesOf } from './connections';
 import type { Costs } from './cost';
@@ -57,7 +57,7 @@ export type Shown = Message & { live: string | null; whole?: true; batch?: true;
 // itself. forecast: what the send expects to read from the cache (runtime/cache), kept on its receipt. preread: makes
 // the record of the 토큰 절약 call that shortened the prompt from the reply's receipt, which keeps it. agents: the pre
 // agents' calls, which the receipt keeps.
-export type Ask = { calibration?: Pick<CallCalibration, 'fit' | 'retries'>; refit?: (refusal: ContextRefusal, measurement: InputMeasurement) => Promise<{ prompt: Assembled; fit: TokenFit; retries: CallCalibration['retries'] } | null>; route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes; forecast?: CacheForecast; preread?: Settle; agents?: AgentRun[] };
+export type Ask = { diagnose?: (prompt: Assembled, wire: CacheText) => Promise<CacheDiagnosis | null>; calibration?: Pick<CallCalibration, 'fit' | 'retries'>; refit?: (refusal: ContextRefusal, measurement: InputMeasurement) => Promise<{ prompt: Assembled; fit: TokenFit; retries: CallCalibration['retries'] } | null>; route: Route; settings: ModelSettings; prompt: Assembled; said: Said | null; before?: Writes; forecast?: CacheForecast; preread?: Settle; agents?: AgentRun[] };
 
 // unsent: the user's message was not saved, so its reply was stopped. unsaved: the reply was written
 // but not saved; saveAgain(reply) tries it again. reply null: a restore ended the turn, and nothing is kept to save.
@@ -294,7 +294,10 @@ export class Talk {
     if (this.closed) return null;
     const forecast = answer.calibration.retries.length ? undefined : ready.forecast;
     // Kept before the save, whose store change is what shows the reply's 정보.
-    this.log.attach(chat, call.id, { prompt, forecast });
+    const wire = answer.cache ? wireTextOf(answer.cache) : undefined;
+    const diagnose = forecast && wire && ready.diagnose;
+    this.log.attach(chat, call.id, { prompt, forecast, wire, diagnosis: diagnose ? undefined : null });
+    if (diagnose) void diagnose(prompt, wire!).then((diagnosis) => this.log.attach(chat, call.id, { diagnosis }));
     const written = this.written(held, reply, callOf(route), answer, Date.now(), forecast, ready.preread, ready.agents);
     // A receipt's cache is the view's, so one kept means the answer has its view.
     const printing = cacheKept(written.receipt) && writePrint(this.store, chat, call.id, wireOf(route.connection.id, answer.account, answer.cache!, prompt.parts));

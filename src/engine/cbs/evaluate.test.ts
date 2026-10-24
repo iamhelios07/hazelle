@@ -385,3 +385,10 @@ describe('steps', () => {
     ]);
   });
 });
+
+it('marks a capped trace result before callers unescape it', () => {
+  const trace: CbsTrace = { steps: [], omitted: 0 };
+  const text = 'x'.repeat(1001);
+  expect(evaluate('{{getvar::long}}', context({ variables: new Map([['long', text]]) }), trace)).toBe(text);
+  expect(trace.steps[0]).toMatchObject({ result: text.slice(0, 1000), truncated: true });
+});

@@ -90,7 +90,7 @@ export function rewritten(prompt: Assembled, messages: ChatMessage[], countToken
   if (typeof dropped !== 'number') return dropped;
   const gone = new Set(chat.slice(0, dropped));
   const kept = sent.filter((_, at) => !gone.has(at));
-  return { ...prompt, messages: kept.map(({ message }) => message), parts: kept.map(({ from, tokens, origin }) => ({ from, tokens, ...(origin !== undefined && { origin }) })), dropped: prompt.dropped + dropped };
+  return { ...prompt, messages: kept.map(({ message }) => message), parts: kept.map(({ from, tokens, origin, source, cbs }) => ({ from, tokens, ...(origin !== undefined && { origin }), ...(source !== undefined && { source }), ...(cbs && { cbs }) })), dropped: prompt.dropped + dropped };
 }
 
 function range(kept: ChatSent[], before: Map<number, Sent[]>, { range: { from, to }, from: slot }: ChatPart): Sent[] {

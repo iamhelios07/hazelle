@@ -29,6 +29,8 @@ describe('the request log', () => {
       const { entries } = session.log.of(chat);
       expect(entries.map(({ purpose, receipt }) => [purpose, receipt.state])).toEqual([['reply', 'done'], ['mascot', 'done']]);
       expect(entries[0]!.prompt?.messages.at(-1)).toMatchObject({ content: '안녕' });
+      expect(entries[0]!.wire?.at(-1)).toMatchObject({ content: '안녕' });
+      expect(entries[0]!.diagnosis).toBeNull();
       expect(entries[1]!.prompt).toBeUndefined();
       lease.release();
     }));
@@ -46,6 +48,21 @@ describe('the request log', () => {
     listener([{ kind: 'scope', id: 'a', parent: null }]);
     expect(log.of('a').entries).toEqual([]);
     expect(log.entry('b', '2')).not.toBeNull();
+  });
+
+  it('counts attached wire text and diagnosis when trimming and never reattaches an evicted call', () => {
+    const log = new RequestLog({ subscribe: () => () => true, scopeState: () => 'loaded' });
+    log.record(entry('a', 'old', 'x'.repeat(REQUEST_LOG_LIMITS.characters - 100)));
+    log.record(entry('a', 'new'));
+    log.attach('a', 'new', { wire: [{ content: 'w'.repeat(200), index: 3 }] });
+    expect(log.of('a').omitted).toBe(1);
+    expect(log.entry('a', 'new')!.wire).toEqual([{ content: 'w'.repeat(200), index: 3 }]);
+    log.attach('a', 'old', { wire: [{ content: 'gone', index: 0 }] });
+    expect(log.entry('a', 'old')).toBeNull();
+    log.record(entry('a', 'latest'));
+    log.attach('a', 'latest', { diagnosis: { missing: 0, parts: [{ kind: 'added', role: 'user', from: { kind: 'answer' }, before: null, after: 0, causes: [{ kind: 'unknown' }], diff: { coarse: true, runs: [{ kind: 'after', text: 'd'.repeat(REQUEST_LOG_LIMITS.characters) }] } }] } });
+    expect(log.of('a').entries.map(({ receipt }) => receipt.id)).toEqual(['latest']);
+    expect(log.of('a').omitted).toBe(2);
   });
 
   it('keeps a bounded number of entries per chat, counting what it let go, and always the newest', () => {
