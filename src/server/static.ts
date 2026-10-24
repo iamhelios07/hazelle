@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono, type Context } from 'hono';
 import { PULSE_PAGE, type PulseAnswer } from '../contracts/pulse';
+import { TOOL_SANDBOX } from '../contracts/sandbox';
 import { SHARE_ID, type ShareCover } from '../contracts/shares';
 import { VISITOR_HEADER } from '../contracts/http';
 import type { PageVisit } from './visits';
@@ -15,7 +16,7 @@ export const CSP =
 export const pageCsp = (nonce: string) => `${CSP}; style-src 'self' 'nonce-${nonce}'`;
 // Vite writes this placeholder into the page wherever a nonce goes (vite.config html.cspNonce).
 const NONCE = 'HAZELLE_NONCE';
-export const SANDBOX_CSP = "sandbox allow-scripts; default-src 'none'; script-src 'self' blob: 'unsafe-eval' 'wasm-unsafe-eval'; worker-src blob:; connect-src 'none'; img-src data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src data: blob:; frame-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'";
+export const SANDBOX_CSP = `sandbox ${TOOL_SANDBOX}; default-src 'none'; script-src 'self' blob: 'unsafe-eval' 'wasm-unsafe-eval'; worker-src blob:; connect-src 'none'; img-src data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; media-src data: blob:; frame-src 'none'; form-action 'none'; base-uri 'none'; frame-ancestors 'self'`;
 // A frame whose module allowed the network (runtime/tools/frame.ts asks with ?network=1): pictures, fonts and the
 // stylesheets that load webfonts may come from outside. connect-src stays closed; its fetches go through the host.
 export const SANDBOX_NETWORK_CSP = SANDBOX_CSP.replace("img-src data: blob:", 'img-src data: blob: https:').replace("style-src 'self' 'unsafe-inline'", "style-src 'self' 'unsafe-inline' https:").replace("font-src 'self' data:", "font-src 'self' data: https:");

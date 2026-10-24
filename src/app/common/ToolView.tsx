@@ -1,4 +1,5 @@
 import { useCallback, useRef } from 'react';
+import { TOOL_ALLOW, TOOL_SANDBOX } from '../../contracts/sandbox';
 import type { ToolManifest } from '../../tool-api/manifest';
 import { useDisplay } from '../display';
 import { useSession, useTool } from '../session';
@@ -21,5 +22,5 @@ export function ToolView({ module, chat, title, onClose }: Props) {
   // A frame tool's document runs on with its listeners whether shown or not; theme never reloads it.
   const attach = useCallback((place: (frame: HTMLIFrameElement | null) => void) => tools.attach(module, { chat, place, close: () => close.current() }), [tools, module, chat]);
   if (tool?.value.manifest.risu !== undefined) return <FrameSlot key={`${module}:${chat}`} title={title} onMount={attach} />;
-  return <ToolFrame key={`${module}:${chat}:${theme}`} title={title} onMount={mount} />;
+  return <ToolFrame key={`${module}:${chat}:${theme}`} title={title} sandbox={TOOL_SANDBOX} allow={TOOL_ALLOW} onMount={mount} />;
 }

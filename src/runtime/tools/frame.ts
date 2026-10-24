@@ -1,3 +1,4 @@
+import { TOOL_ALLOW, TOOL_SANDBOX } from '../../contracts/sandbox';
 import type { Port, Role } from '../../tool-api/protocol';
 import { ToolStopped } from '../script-binding';
 import type { ToolPage } from './facade';
@@ -31,7 +32,8 @@ export const toolFrame: OpenFrame = (opening) => {
   window.addEventListener('message', receive);
   if (frame) {
     frame.hidden = true;
-    frame.setAttribute('sandbox', 'allow-scripts');
+    frame.setAttribute('sandbox', TOOL_SANDBOX);
+    frame.allow = TOOL_ALLOW;
     frame.src = `/sandbox.html?role=${role}${opening.role === 'frame' && opening.network ? '&network=1' : ''}`;
     document.body.append(frame);
     target = frame.contentWindow;

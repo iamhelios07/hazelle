@@ -1,13 +1,13 @@
 import { useCallback } from 'react';
 import styles from './ToolFrame.module.css';
 
-type Props = { title: string; onMount: (window: Window) => () => void };
+type Props = { title: string; sandbox: string; allow: string; onMount: (window: Window) => () => void };
 
-export function ToolFrame({ title, onMount }: Props) {
+export function ToolFrame({ title, sandbox, allow, onMount }: Props) {
   const attach = useCallback((frame: HTMLIFrameElement | null) => {
     if (frame?.contentWindow) return onMount(frame.contentWindow);
   }, [onMount]);
-  return <iframe ref={attach} className={styles.frame} title={title} sandbox="allow-scripts" src="/sandbox.html?role=page" referrerPolicy="no-referrer" />;
+  return <iframe ref={attach} className={styles.frame} title={title} sandbox={sandbox} allow={allow} src="/sandbox.html?role=page" referrerPolicy="no-referrer" />;
 }
 
 type Place = (frame: HTMLIFrameElement | null) => void;
