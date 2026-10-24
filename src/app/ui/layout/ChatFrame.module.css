@@ -74,6 +74,10 @@
   --reading-leading: var(--prose-leading-wide);
 }
 
+.leadingWidest {
+  --reading-leading: var(--prose-leading-widest);
+}
+
 .widthNarrow {
   --read-width: var(--read-narrow);
 }

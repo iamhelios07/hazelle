@@ -330,6 +330,7 @@
   --prose-leading-narrow: 1.7;
   --prose-leading-normal: 1.9;
   --prose-leading-wide: 2.1;
+  --prose-leading-widest: 2.3;
   /* 고딕 reads larger than 명조 at one size, so the story sets it a pixel smaller and a little tighter. */
   --prose-sans-shrink: 1px;
   --prose-sans-tighten: 0.1;
