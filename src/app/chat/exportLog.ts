@@ -30,6 +30,19 @@ type Illustrated = { placed: ReadonlyMap<number, string>; pictures: ReadonlyMap<
 // The rows a log draws, as the chat draws them, their pictures still named by pictureRef. A reply being written, a
 // failed one and an empty one are left out, and a message's boxes stand in it as they did when it was written. A
 // message's 삽화 go into its first text, the newest of each place, at its paragraph as the chat places it.
+// A message's stories in the order its row draws them: the boxes its scripts put at the top, its own, then the bottom's.
+const aroundBoxes = (boxes: Display['boxes'][number], own: string[], decor: { bot: boolean; url: PictureUrl }) => {
+  const box = ({ html }: (typeof boxes)[number]) => shownHtml(html, decor);
+  return [...boxes.filter(({ at }) => at === 'top').map(box), ...own, ...boxes.filter(({ at }) => at === 'bottom').map(box)];
+};
+
+// A message's stories as the display gives them, drawn or not, with no pictures, and the bot's sheet: chat.rendered's.
+export function displayed(view: Display, index: number, bot: boolean) {
+  const decor = { bot, url: () => undefined };
+  const text = view.texts[index]!;
+  return { stories: aroundBoxes(view.boxes[index]!, text.trim() ? [shownHtml(text, decor)] : [], decor), css: bot ? resolveAssets(view.css, decor.url) : '' };
+}
+
 export function logDraft(messages: Shown[], view: Display, { placed, pictures: drawn }: Illustrated, flipped: ReadonlySet<string>, bot: boolean, names: OpenChat['names'], { hideMe, text, from, to }: LogChoices): LogDraft {
   const decor = { bot, url: pictureRef };
   const rows: LogRow[] = [];
@@ -52,8 +65,7 @@ export function logDraft(messages: Shown[], view: Display, { placed, pictures: d
     };
     const boxes = view.boxes[index]!;
     if (!said.length && !boxes.length) continue;
-    const box = ({ html }: (typeof boxes)[number]) => shownHtml(html, decor);
-    const stories = [...boxes.filter(({ at }) => at === 'top').map(box), ...said.map(story), ...boxes.filter(({ at }) => at === 'bottom').map(box)];
+    const stories = aroundBoxes(boxes, said.map(story), decor);
     const mine = message.role === 'user';
     rows.push({ key: message.id, name: mine && hideMe ? ME_HIDDEN : speaker(message, names.character, names.me, names.modelName), mine, stories });
   }

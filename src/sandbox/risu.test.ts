@@ -43,7 +43,7 @@ function fakeApi({ open = true } = {}) {
     writeLore: (entry: Omit<Hazelle.LoreEntry, 'owner'>) => { lore.push(entry); },
     variables: { set: (name: string, value: string) => { variables.push([name, value]); } },
     model, send, say: (text: string) => { said.push(text); },
-    rendered: async (at: Hazelle.At) => (at.id === 'm1' ? { html: '<b>hi there</b>', css: '.b { color: red; }', text: 'hi there' } : null),
+    rendered: async (at: Hazelle.At | null) => (at === null ? { html: '<i>welcome</i>', css: '.b { color: red; }', text: 'welcome' } : at.id === 'm1' ? { html: '<b>hi there</b>', css: '.b { color: red; }', text: 'hi there' } : null),
   } as unknown as Hazelle.Chat;
   const api = {
     api: 1, tool: { name: 'test', author: 'jin', displayName: 'Test', version: '1' }, context: 'frame',
@@ -162,17 +162,28 @@ describe('the Risu adapter', () => {
     expect(await Risuai.getRuntimeInfo!()).toEqual({ apiVersion: '3.0', platform: 'hazelle', saveMethod: 'account' });
   });
 
-  it('finds in getRootDocument only a drawn message, by chatId as CSS.escape writes it or by index, and the bot\'s sheet', async () => {
-    type Found = { getOuterHTML(): Promise<string>; innerText(): Promise<string> };
+  it('finds in getRootDocument the chat screen\'s rows, greeting at -1, a body by chatId as CSS.escape writes it or by index, and the bot\'s sheet', async () => {
+    type Found = { getOuterHTML(): Promise<string>; getInnerHTML(): Promise<string>; innerText(): Promise<string>; getAttribute(name: string): Promise<string | null>; scrollIntoView(): Promise<void> };
+    type Safe<T> = { at(index: number): Promise<T | undefined>; length(): Promise<number> };
     const fake = fakeApi();
-    const root = await install(fake).Risuai.getRootDocument!() as { querySelector(selector: string): Promise<Found | null>; querySelectorAll(selector: string): Promise<Found[]> };
-    expect(await root.querySelectorAll('style, link[rel="stylesheet"]')).toEqual([]);
+    const { Risuai } = install(fake);
+    const root = await Risuai.getRootDocument!() as { querySelector(selector: string): Promise<Found | null>; querySelectorAll(selector: string): Promise<Safe<Found>> };
+    expect(await (await root.querySelectorAll('style')).length()).toBe(0);
     const body = (await root.querySelector('.risu-chat[data-chat-id="\\6d 1"] .chattext:not(.hidden)'))!;
     expect(await body.getOuterHTML()).toBe('<div class="chattext"><b>hi there</b></div>');
     expect(await body.innerText()).toBe('hi there');
-    expect(await (await root.querySelector('.risu-chat[data-chat-index="1"] .chattext'))!.innerText()).toBe('hi there');
-    expect(await Promise.all((await root.querySelectorAll('style, link[rel="stylesheet"]')).map((sheet) => sheet.getOuterHTML()))).toEqual(['<style>.b { color: red; }</style>']);
-    expect(await root.querySelector('.risu-chat[data-chat-index="0"] .chattext')).toBeNull();
+    expect(await (await root.querySelector('[data-chat-index="1"] .chattext'))!.innerText()).toBe('hi there');
+    expect(await (await root.querySelector('[data-chat-index="-1"] .chattext'))!.innerText()).toBe('welcome');
+    const row = (await root.querySelector('.risu-chat[data-chat-index][data-chat-index="1"]'))!;
+    expect(await row.getAttribute('data-chat-id')).toBe('m1');
+    await expect(row.scrollIntoView()).resolves.toBeUndefined();
+    const rows = await root.querySelectorAll('.default-chat-screen .risu-chat[data-chat-index]');
+    expect(await rows.length()).toBe(2);
+    expect(await (await rows.at(0))!.getAttribute('data-chat-index')).toBe('-1');
+    expect(await (await root.querySelector('.default-chat-screen'))!.getInnerHTML()).toBe('<div class="risu-chat" data-chat-index="-1" data-chat-id=""><div class="chattext"><i>welcome</i></div></div><div class="risu-chat" data-chat-index="1" data-chat-id="m1"><div class="chattext"><b>hi there</b></div></div>');
+    expect(await Promise.all((await Risuai.unwarpSafeArray!(await root.querySelectorAll('style') as never) as Found[]).map((sheet) => sheet.getOuterHTML()))).toEqual(['<style>.b { color: red; }</style>']);
+    expect(await (await root.querySelectorAll('link[rel~="stylesheet"]')).length()).toBe(0);
+    expect(await root.querySelector('[data-chat-index="0"] .chattext')).toBeNull();
     expect(await root.querySelector('body')).toBeNull();
     expect(fake.missing).toEqual(['getRootDocument:page']);
   });
@@ -286,7 +297,6 @@ describe('the Risu adapter', () => {
     const current = await Risuai.getCurrentCharacterIndex!() as number;
     expect(await Risuai.getCharacterFromIndex!(current as never)).toMatchObject({ chaId: 'character-1', globalLore: [{ comment: 'Port' }] });
     expect(await Risuai.getCharacterFromIndex!((current + 1) as never)).toBeNull();
-    expect(await Risuai.unwarpSafeArray!([1, 2] as never)).toEqual([1, 2]);
   });
 
   it('writes an argument through the tool settings', async () => {

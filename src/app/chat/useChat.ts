@@ -10,7 +10,9 @@ import { chatTranslate, featuresOf } from '../../runtime/features';
 import { removeChat, renameChat, restoreChat, restoreRaw } from '../../runtime/chat-log';
 import { branchFrom, pickVersion } from '../../runtime/message-acts';
 import { badgesByVersion, toolActions, toolComposer } from './toolMenu';
+import type { ScreenAt } from '../../runtime/script-pages';
 import { triggersOf } from '../../runtime/script-selection';
+import { greetingOf } from '../../runtime/greetings';
 import type { Shown } from '../../runtime/talk';
 import { blocked, isBlocked, type Target } from '../../runtime/turn-context';
 import { packsOf, togglesOf, usageShownOf } from '../../runtime/chat-context';
@@ -27,9 +29,10 @@ import { BIN_KEEPS, LORE_BUDGET_LABEL } from '../common/words';
 import { useAssetUrl, useChatDisplay, useChatMemory, useChatTools, useChildren, useSaves, useSession, useSettings, useStored, useToolFrames, useTurn } from '../session';
 import { navigate } from '../shell/router';
 import { useToast } from '../toast';
-import { storySnapshot, useMenuHandle, usePanelsBeside, useTimePin, useViewport, type BotButton, type Reading } from '../ui';
+import { storyText, useMenuHandle, usePanelsBeside, useTimePin, useViewport, type BotButton, type Reading } from '../ui';
 import { inspectShown, NO_PANELS, opened, type InfoTab, type InspectTab, type Panel, type Panels } from './panels';
 import { useSendNotes } from './useSendNotes';
+import { displayed } from './exportLog';
 import { useDraft } from './useDraft';
 import { budgetCut, pickStarted } from './infoReply';
 import { toggleRows, toggleSaveKey } from './toggles';
@@ -256,10 +259,11 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     return (text ? await say(text) : await asked(chat, { kind: 'answer' })) ? 'failed' : null;
   }
   // The row as drawn, on the version shown and not under an edit.
-  function renderedForTool(at: { id: string; version: string }) {
-    const message = messages.find((each) => each.id === at.id);
-    const row = message && shown(message).id === at.version && editing?.id !== at.id && scroll.scrollRef.current?.querySelector(`[data-key="${CSS.escape(at.id)}"]`);
-    return row ? storySnapshot(row) : null;
+  function renderedForTool(at: ScreenAt): Hazelle.Rendered | null {
+    const index = at === null ? (greetingOf(messages) ? 0 : -1) : messages.findIndex((each) => each.id === at.id);
+    if (index < 0 || (at !== null && shown(messages[index]!).id !== at.version)) return null;
+    const { stories, css } = displayed(view, index, bot);
+    return { html: stories.join(''), css, text: stories.map(storyText).filter(Boolean).join('\n\n') };
   }
   const toolScreen = useRef({ send: sendForTool, rendered: renderedForTool });
   toolScreen.current = { send: sendForTool, rendered: renderedForTool };

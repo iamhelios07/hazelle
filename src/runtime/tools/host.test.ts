@@ -545,8 +545,10 @@ it('writes the chat\'s own lorebook by name and its variables unprefixed, sends 
     const [hello] = await chat.messages();
     expect(await chat.rendered(hello!)).toBeNull();
     const drawn = { html: '<p>hello</p>', css: '', text: 'hello' };
-    const leave = session.scriptPages.screen(f.chat, { send: screen, rendered: (at) => (at.id === hello!.id && at.version === hello!.version ? drawn : null) });
+    const greeting = { html: '<p>welcome</p>', css: '', text: 'welcome' };
+    const leave = session.scriptPages.screen(f.chat, { send: screen, rendered: (at) => (at === null ? greeting : at.id === hello!.id && at.version === hello!.version ? drawn : null) });
     expect(await chat.rendered(hello!)).toEqual(drawn);
+    expect(await chat.rendered(null)).toEqual(greeting);
     await setModels(session.store, { kind: 'module', id: f.module }, true);
     chat.writeLore({ name: 'save', keys: ['hero'], text: '{}', always: false, on: true });
     chat.variables.set('sh_Player', 'Jin');

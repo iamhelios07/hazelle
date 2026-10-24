@@ -27,8 +27,9 @@ declare namespace Hazelle {
   // screen tells as it tells a typed message's failure.
   type SendRefusal = 'not-allowed' | 'not-declared' | 'busy' | 'closed' | 'failed';
   type SendAnswer = { ok: true } | { ok: false; reason: SendRefusal };
-  // A message version as the chat screen draws it now: html its drawn bodies in order, hidden parts included and pictures
-  // left out; css the bot's sheet as the app applies it, which is the whole chat's; text what the bodies read.
+  // A message version as the chat screen's display gives it, drawn or scrolled off: html its bodies in order, its boxes
+  // around its text, hidden parts included and pictures left out; css the bot's sheet, which is the whole chat's; text
+  // what the bodies read.
   type Rendered = { html: string; css: string; text: string };
   type Question = { kind: 'input'; text: string } | { kind: 'confirm'; text: string } | { kind: 'select'; text?: string; options: string[] };
   type Settings = Record<string, string | number | boolean>;
@@ -106,9 +107,9 @@ declare namespace Hazelle {
     // Bound to the chat, not the event, and sent once this tool's page writes have landed; answers when the turn ends,
     // so an event that awaits it keeps this tool out of that turn.
     send(text: string): Promise<SendAnswer>;
-    // Bound to the chat, as picture is. null while the chat is not open on the screen, the version is not the one shown,
-    // or its row is not drawn (scrolled far off, or being edited).
-    rendered(at: At): Promise<Rendered | null>;
+    // Bound to the chat, as picture is. at null: the greeting. null while the chat is not open on the screen, or the
+    // version is not the one shown.
+    rendered(at: At | null): Promise<Rendered | null>;
   }
   interface Storage {                           // tool data: synced, owned by the module
     get<T extends Json = Json>(key: string): Promise<T | undefined>;

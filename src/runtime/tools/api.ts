@@ -227,9 +227,10 @@ export class ToolApi {
         return this.services.pages.send(first, second, { kind: 'module', id: entry.module }, AbortSignal.any([frame.closing.signal, cancel]));
       }
       case 'chat.rendered': {
-        if (typeof first !== 'string' || !isRecord(second) || typeof second.id !== 'string' || typeof second.version !== 'string') break;
+        const at = second === null ? null : isRecord(second) && typeof second.id === 'string' && typeof second.version === 'string' ? { id: second.id, version: second.version } : undefined;
+        if (typeof first !== 'string' || at === undefined) break;
         if (!this.runtime.allowed(first, entry.module)) throw new ToolStopped();
-        return this.services.pages.rendered(first, { id: second.id, version: second.version });
+        return this.services.pages.rendered(first, at);
       }
       case 'settings': return this.session.store.get('tool', toolId(entry.module))!.value.settings;
       case 'settings.set': {

@@ -10,8 +10,10 @@ import type { ScriptSchedule } from './script-schedule';
 import { scopeFor, unitFor } from './script-selection';
 import type { ObjectStore } from './store';
 
-// send: the screen's own send, null once sent or why not. rendered: a message version as the screen draws it now.
-export type ChatScreen = { send(text: string): Promise<'busy' | 'failed' | null>; rendered(at: { id: string; version: string }): Hazelle.Rendered | null };
+// send: the screen's own send, null once sent or why not. rendered: a message version as the screen's display gives it
+// now (at null: the greeting).
+export type ScreenAt = { id: string; version: string } | null;
+export type ChatScreen = { send(text: string): Promise<'busy' | 'failed' | null>; rendered(at: ScreenAt): Hazelle.Rendered | null };
 
 export class ScriptPages {
   // The open chat screens, by chat (useChat).
@@ -37,7 +39,7 @@ export class ScriptPages {
     return () => { if (this.screens.get(chat) === screen) this.screens.delete(chat); };
   }
 
-  rendered(chat: string, at: { id: string; version: string }): Hazelle.Rendered | null {
+  rendered(chat: string, at: ScreenAt): Hazelle.Rendered | null {
     return this.screens.get(chat)?.rendered(at) ?? null;
   }
 

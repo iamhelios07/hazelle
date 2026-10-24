@@ -86,10 +86,35 @@ const once = <T>(read: () => Promise<T>) => {
   return () => held ??= read();
 };
 
-// Risu's main document as far as Hazelle has one: a message's body as the chat screen draws it (chat.rendered), and the
-// page's sheets as the bot's. CSS.escape escapes an id that starts with a digit, which the selector is read back from.
-const CHATTEXT = /^\.risu-chat\[data-chat-(id|index)="((?:[^"\\]|\\.)+)"\]\s+\.chattext(?::not\(\.hidden\))?$/;
-const SHEETS = /^style\s*,\s*link\[rel="?stylesheet"?\]$/;
+// Risu's main document as far as Hazelle has one: the chat screen (.default-chat-screen), its message rows and their
+// bodies as the screen's display gives them (chat.rendered), and the page's sheets as the bot's. A row stands at Risu's
+// data-chat-index, the greeting at -1. CSS.escape escapes an id that starts with a digit, which the selector is read
+// back from.
+const ROW = String.raw`(?:\.risu-chat)?(?:\[data-chat-index\])?\[data-chat-(id|index)="((?:[^"\\]|\\.)+)"\]`;
+const BODY = new RegExp(`^(?:\\.default-chat-screen\\s+)?${ROW}\\s+\\.chattext(?::not\\(\\.hidden\\))?$`);
+const ONE_ROW = new RegExp(`^(?:\\.default-chat-screen\\s+)?${ROW}$`);
+const ROWS = /^(?:\.default-chat-screen\s+)?(?:\.risu-chat)?\[data-chat-index\]$/;
+const SCREEN = '.default-chat-screen';
+const STYLES = /^style$/;
+const LINKS = /^link\[rel~?="?stylesheet"?\]$/;
+const SHEETS = /^style\s*,\s*link\[rel~?="?stylesheet"?\]$/;
+// Risu's SafeClassArray (Risuai.d.ts): at and length answer asynchronously, and unwarpSafeArray hands out the items.
+const ITEMS = Symbol('items');
+const safeArray = <T>(items: T[]) => ({ [ITEMS]: items, at: async (index: number) => items.at(index), length: async () => items.length, push: async (item: T) => { items.push(item); } });
+type Row = { index: number; id: string; drawn: Hazelle.Rendered };
+const escapeAttribute = (text: string) => text.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
+const bodyHtml = ({ html }: Hazelle.Rendered) => `<div class="chattext">${html}</div>`;
+const rowHtml = ({ index, id, drawn }: Row) => `<div class="risu-chat" data-chat-index="${index}" data-chat-id="${escapeAttribute(id)}">${bodyHtml(drawn)}</div>`;
+const bodyOf = (drawn: Hazelle.Rendered) => ({ getOuterHTML: async () => bodyHtml(drawn), getInnerHTML: async () => drawn.html, innerText: async () => drawn.text });
+const rowOf = (row: Row) => ({
+  getOuterHTML: async () => rowHtml(row),
+  getInnerHTML: async () => bodyHtml(row.drawn),
+  innerText: async () => row.drawn.text,
+  getAttribute: async (name: string) => (name === 'data-chat-index' ? String(row.index) : name === 'data-chat-id' ? row.id : null),
+  // Every message is answered whether the screen shows it or not, so there is nothing to bring into view; a plugin that
+  // scrolls Risu's chat to load older rows (Novelistic) finds them all already there.
+  scrollIntoView: async () => {},
+});
 const unescapeCss = (text: string) => text.replace(/\\([0-9a-f]{1,6})\s?|\\(.)/gi, (_, hex?: string, char?: string) => (hex ? String.fromCodePoint(parseInt(hex, 16)) : char!));
 
 // Risu runs a plugin as the body of an async function (apiV3/factory.ts), so a top-level await works (선택지 용사) and
@@ -130,6 +155,29 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   const unloads: Callback[] = [];
   // The bot's sheet of the last message getRootDocument found, which is the whole chat's.
   let sheet: string | null = null;
+  const kept = (row: Row) => { sheet = row.drawn.css; return row; };
+  // The open chat's messages as Risu's rows, the greeting first; null with no chat open.
+  const rows = async (): Promise<Row[] | null> => {
+    const chat = await frame.chat();
+    if (!chat) return null;
+    const messages = await chat.messages();
+    const [greeting, ...drawn] = await Promise.all([chat.rendered(null), ...messages.map(({ index, id, version }) => chat.rendered({ index, id, version }))]);
+    const all = [...(greeting ? [{ index: -1, id: '', drawn: greeting }] : []), ...messages.flatMap(({ index, id }, at) => (drawn[at] ? [{ index, id, drawn: drawn[at] }] : []))];
+    all.forEach(kept);
+    return all;
+  };
+  const rowAt = async (by: 'id' | 'index', key: string): Promise<Row | null> => {
+    const chat = await frame.chat();
+    if (!chat) return null;
+    if (by === 'index' && key === '-1') {
+      const greeting = await chat.rendered(null);
+      return greeting && kept({ index: -1, id: '', drawn: greeting });
+    }
+    const messages = await chat.messages();
+    const message = by === 'id' ? messages.find(({ id }) => id === key) : messages[Number(key)];
+    const drawn = message && await chat.rendered({ index: message.index, id: message.id, version: message.version });
+    return drawn ? kept({ index: message.index, id: message.id, drawn }) : null;
+  };
   // Risu does not await a button or setting; holding the tool's lane for a whole screen would stall its other events.
   const press = (run: Callback | undefined) => { if (run) void Promise.resolve().then(run).catch((error: unknown) => console.error(error)); };
 
@@ -199,26 +247,32 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     getArg: async (key: string) => (await api.settings())[key],
     setArgument: (key: string, value: string | number) => api.setSetting(key, value),
     setArg: (key: string, value: string | number) => api.setSetting(key, value),
-    // Risu wraps its main document's elements in SafeClassArray; getRootDocument hands out plain arrays.
-    unwarpSafeArray: async (array: unknown[]) => array,
-    // Read-only, and only where a message is drawn: the rest of the page (body, to put a box of its own on the app) is
-    // declined (design §6.10) and found nowhere.
+    unwarpSafeArray: async (array: ReturnType<typeof safeArray>) => array[ITEMS],
+    // Read-only, and only the chat screen and its messages: the rest of the page (body, to put a box of its own on the
+    // app) is declined (design §6.10) and found nowhere.
     getRootDocument: async () => ({
       querySelector: async (selector: string) => {
-        const found = CHATTEXT.exec(selector.trim());
-        if (!found) { tell('getRootDocument:page'); return null; }
-        const chat = await frame.chat();
-        const messages = chat ? await chat.messages() : [];
-        const key = unescapeCss(found[2]!);
-        const message = found[1] === 'id' ? messages.find(({ id }) => id === key) : messages[Number(key)];
-        const drawn = message && await chat!.rendered({ index: message.index, id: message.id, version: message.version });
-        if (!drawn) return null;
-        sheet = drawn.css;
-        return { getOuterHTML: async () => `<div class="chattext">${drawn.html}</div>`, getInnerHTML: async () => drawn.html, innerText: async () => drawn.text };
+        const wanted = selector.trim();
+        if (wanted === SCREEN) {
+          const all = await rows();
+          return all && { getInnerHTML: async () => all.map(rowHtml).join(''), getOuterHTML: async () => `<div class="default-chat-screen">${all.map(rowHtml).join('')}</div>` };
+        }
+        if (ROWS.test(wanted)) {
+          const first = (await rows())?.[0];
+          return first ? rowOf(first) : null;
+        }
+        const body = BODY.exec(wanted);
+        const one = body ?? ONE_ROW.exec(wanted);
+        if (!one) { tell('getRootDocument:page'); return null; }
+        const row = await rowAt(one[1] as 'id' | 'index', unescapeCss(one[2]!));
+        return row && (body ? bodyOf(row.drawn) : rowOf(row));
       },
       querySelectorAll: async (selector: string) => {
-        if (!SHEETS.test(selector.trim())) { tell('getRootDocument:page'); return []; }
-        return sheet === null ? [] : [{ getOuterHTML: async () => `<style>${sheet}</style>` }];
+        const wanted = selector.trim();
+        if (ROWS.test(wanted)) return safeArray((await rows())?.map(rowOf) ?? []);
+        if (LINKS.test(wanted)) return safeArray([]);
+        if (!STYLES.test(wanted) && !SHEETS.test(wanted)) { tell('getRootDocument:page'); return safeArray([]); }
+        return safeArray(sheet === null ? [] : [{ getOuterHTML: async () => `<style>${sheet}</style>`, textContent: async () => sheet }]);
       },
     }),
     getDatabase: async (keys: string[] | 'all' = 'all') => {

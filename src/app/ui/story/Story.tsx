@@ -214,14 +214,21 @@ export function groundRules(rules: Iterable<object>) {
 let base: CSSStyleSheet | null = null;
 export const botSheets = (shadow: ShadowRoot) => shadow.adoptedStyleSheets.filter((sheet) => sheet !== base);
 
-// What an element draws in its stories, in order (Hazelle.Rendered): the base sheet stays the app's, and a slotted picture
-// or edit box is no story's own.
-export function storySnapshot(element: Element): { html: string; css: string; text: string } | null {
-  const roots = [...element.querySelectorAll(`.${styles.story} > div`)].flatMap((host) => (host.shadowRoot ? [host.shadowRoot] : []));
-  if (roots.length === 0) return null;
-  const css = botSheets(roots[0]!).flatMap((sheet) => [...sheet.cssRules].map((rule) => rule.cssText)).join('\n');
-  const text = (root: ShadowRoot) => [...root.childNodes].map((node) => (node instanceof HTMLElement ? node.innerText : node.nodeType === Node.TEXT_NODE ? node.textContent!.trim() : '')).filter(Boolean).join('\n');
-  return { html: roots.map((root) => root.innerHTML).join(''), css, text: roots.map(text).join('\n\n') };
+const BREAKS = /^(?:P|DIV|LI|TR|BLOCKQUOTE|PRE|H[1-6]|SECTION|ARTICLE|HEADER|FOOTER|UL|OL|TABLE|DETAILS|SUMMARY)$/;
+// What a story's html reads as, undrawn (Hazelle.Rendered's text), with a line break for each <br> and block. DOMPurify
+// parses it, as sanitize does: the page requires Trusted Types, which a plain DOMParser of a string breaks, and its
+// fragment stays in an inert document, so no picture loads.
+export function storyText(html: string): string {
+  let text = '';
+  const walk = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) text += node.textContent;
+    if (!(node instanceof Element) || node.matches('style, template')) return;
+    if (node.tagName === 'BR') text += '\n';
+    node.childNodes.forEach(walk);
+    if (BREAKS.test(node.tagName)) text += '\n';
+  };
+  DOMPurify.sanitize(html, { RETURN_DOM_FRAGMENT: true }).childNodes.forEach(walk);
+  return text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 const sheets = new Map<string, CSSStyleSheet>();
 function sheetFor(css: string, veiled: boolean): CSSStyleSheet {

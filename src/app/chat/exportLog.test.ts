@@ -4,7 +4,7 @@ import type { Receipt, Version } from '../../model/chat';
 import type { Shown } from '../../runtime/talk';
 import { placeMark } from '../../model/illustration';
 import type { Stored } from '../../model/kinds';
-import { logDraft, resolveLog, untranslated, type LogText } from './exportLog';
+import { displayed, logDraft, resolveLog, untranslated, type LogText } from './exportLog';
 
 const picture = '0f8fad5b-d9cb-469f-a165-70867728950e';
 const failed = { state: 'failed' } as Receipt;
@@ -60,4 +60,12 @@ it('puts the newest 삽화 of each place in a version’s text where the chat pl
 it('offers to translate only what a translated log would show untranslated', () => {
   expect(untranslated(messages, view, { from: 1, to: 5 }).map(({ id }) => id)).toEqual(['b']);
   expect(untranslated(messages, view, { from: 3, to: 5 })).toEqual([]);
+});
+
+it('gives a message as the display has it, its boxes around its text, with no pictures, and the sheet only with the bot\'s style', () => {
+  const first = displayed(view, 0, true);
+  expect(first.stories.map((story) => story.replace(/<[^>]+>/g, '').trim())).toEqual(['Hello', 'HP 7']);
+  expect(first.css).not.toContain(picture);
+  expect(displayed(view, 3, true).stories).toEqual([]);
+  expect(displayed(view, 0, false).css).toBe('');
 });
