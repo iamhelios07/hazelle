@@ -58,7 +58,7 @@ function fakeApi({ open = true } = {}) {
   const fire = (event: string, ...args: unknown[]) => (handlers.get(event) as (...args: unknown[]) => unknown)(...args);
   return { api, chat, card, handlers, storage, menus, missing, edits, added, said, lore, variables, model, send, settings, fire };
 }
-const install = (fake: ReturnType<typeof fakeApi>, scope: Record<string, unknown> = { confirm: () => false, prompt: () => null }) => {
+const install = (fake: ReturnType<typeof fakeApi>, scope: Record<string, unknown> = {}) => {
   installRisu(fake.api, scope);
   return scope as Record<string, unknown> & { Risuai: Record<string, (...args: never[]) => Promise<unknown>> & Record<string, Record<string, (...args: never[]) => Promise<unknown>>> };
 };
@@ -156,9 +156,7 @@ describe('the Risu adapter', () => {
     expect(typeof Risuai.addProvider).toBe('undefined');
     await expect(Risuai.addRisuReplacer!('beforeTranslate' as never, (() => []) as never)).rejects.toThrow("'addRisuReplacer:beforeTranslate'");
     expect((Risuai as Record<string, unknown>).then).toBeUndefined();
-    (scope.confirm as () => boolean)();
-    (scope.confirm as () => boolean)();
-    expect(fake.missing).toEqual(['readInlay', 'addProvider', 'addRisuReplacer:beforeTranslate', 'confirm']);
+    expect(fake.missing).toEqual(['readInlay', 'addProvider', 'addRisuReplacer:beforeTranslate']);
     expect(await Risuai.getRuntimeInfo!()).toEqual({ apiVersion: '3.0', platform: 'hazelle', saveMethod: 'account' });
   });
 

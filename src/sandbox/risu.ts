@@ -489,12 +489,8 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     },
     removeMessageAction: async (id: string) => { if (messageActions.delete(id)) await frame.actions(listedActions()); },
   };
-  // Hazelle's sandbox has no allow-modals. alert becomes the tool's say; confirm and prompt answer at once, so they
-  // cannot be mapped and are only told to 점검.
+  // alert becomes the tool's say, a toast, never a dialog over the chat (design §6.4). confirm and prompt keep the
+  // browser's dialog (allow-modals): their answer is synchronous, which nothing over the port can give.
   scope.alert = (message?: unknown) => { void frame.chat().then((chat) => chat ? chat.say(String(message)) : console.log(message)); };
-  for (const name of ['confirm', 'prompt'] as const) {
-    const native = scope[name] as (...args: unknown[]) => unknown;
-    scope[name] = (...args: unknown[]) => { tell(name); return native(...args); };
-  }
   return () => { for (const unload of unloads) press(unload); };
 }
