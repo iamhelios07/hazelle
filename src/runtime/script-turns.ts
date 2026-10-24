@@ -114,8 +114,8 @@ export class ScriptTurns {
   }
 
   // editRequest: the bot's Lua, then each tool's requesting. Only the chat's own requests pass here; a script's or a
-  // tool's model call, memory and translation do not.
-  async requesting(chat: string, turn: TurnContext, prompt: Pick<Assembled, 'messages' | 'parts'>): Promise<{ messages: ChatMessage[]; writes: Writes }> {
+  // tool's model call, memory and translation do not. running: told each tool's name as it starts.
+  async requesting(chat: string, turn: TurnContext, prompt: Pick<Assembled, 'messages' | 'parts'>, signal: AbortSignal, running: (name: string) => void): Promise<{ messages: ChatMessage[]; writes: Writes }> {
     const scripts = scriptsOf(packsOf(this.session.store, turn.chat));
     const units = this.execution.listening(turn.chat, 'requesting');
     if (scripts.length === 0 && units.length === 0) return { messages: prompt.messages, writes: [] };
@@ -131,6 +131,7 @@ export class ScriptTurns {
         event: (sent) => ({ kind: 'requesting', messages: toolRequest(sent) }),
         scope: (more) => ({ ...turn.scope, pending: [...(turn.scope.pending ?? []), ...writes, ...more] }),
         answer: (answered, sent) => sentBack(sent, answered as unknown[], 'message'),
+        turn: { signal, running },
       });
       return { messages: tooled.value.map(({ message }) => message), writes: [...writes, ...tooled.writes] };
     });

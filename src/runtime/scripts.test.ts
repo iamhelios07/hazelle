@@ -671,10 +671,10 @@ describe('tool events through Scripts', () => {
     }, { run, close: () => {} });
   });
 
-  it('answers an unasked consent with no card under a tool deadline, the prompt\'s or a request\'s, asks from a menu press, and tells a missing 임베딩 모델 once', async () => {
+  it('answers an unasked consent with no card under a tool deadline, asks from a menu press, and tells a missing 임베딩 모델 once', async () => {
     const answers: unknown[] = [];
     const binding: Binding<ToolUnit> = { run: async (_chat, unit, _scope, event, host) => {
-      if (event.kind === 'prompt' || event.kind === 'menu' || event.kind === 'requesting') {
+      if (event.kind === 'prompt' || event.kind === 'menu') {
         answers.push(await host.embed(['query'], 'query', { kind: 'module', id: unit.module }));
         if (event.kind === 'prompt') answers.push(await host.model('aux', [{ role: 'user', content: 'x' }], { kind: 'module', id: unit.module }));
       }
@@ -687,15 +687,14 @@ describe('tool events through Scripts', () => {
       const turn = gatherTurn(session, f.chat, { kind: 'answer' });
       if (!turn || 'kind' in turn) throw new Error('fixture');
       await session.scriptTurns.prompting(f.chat, turn, async () => turn, new AbortController().signal);
-      await session.scriptTurns.requesting(f.chat, turn, { messages: [{ role: 'user', content: 'hello' }], parts: [{ from: { kind: 'script' }, tokens: 1, origin: 'message' }] });
-      expect(answers).toEqual([{ ok: false, reason: 'not-allowed' }, expect.objectContaining({ success: false, reason: 'not-allowed' }), { ok: false, reason: 'not-allowed' }]);
+      expect(answers).toEqual([{ ok: false, reason: 'not-allowed' }, expect.objectContaining({ success: false, reason: 'not-allowed' })]);
       expect(session.scriptInteractions.snapshot().questions).toEqual([]);
       const pressed = session.scriptCommands.menu(f.chat, f.module, 'now');
       await expect.poll(() => session.scriptInteractions.snapshot().questions).toMatchObject([{ question: { kind: 'plugin', grants: ['model'] } }]);
       session.scriptInteractions.answer(session.scriptInteractions.snapshot().questions[0]!.id, 'yes');
       await pressed;
       await session.scriptCommands.menu(f.chat, f.module, 'now');
-      expect(answers.slice(3)).toEqual([{ ok: false, reason: 'no-model' }, { ok: false, reason: 'no-model' }]);
+      expect(answers.slice(2)).toEqual([{ ok: false, reason: 'no-model' }, { ok: false, reason: 'no-model' }]);
       expect(session.scriptInteractions.snapshot().notes.filter(({ kind }) => kind === 'no-model')).toMatchObject([{ role: 'embed' }]);
     }, binding);
   });
@@ -785,9 +784,9 @@ describe('tool events through Scripts', () => {
     }, { run, close: () => {} });
   });
 
-  it('sends the request as it came past a tool that misses the deadline', async () => {
-    const late: (() => void)[] = [];
-    const run = vi.fn<Binding<ToolUnit>['run']>(async (_chat, _unit, _scope, event) => event.kind !== 'requesting' ? noOutcome() : new Promise((resolve) => late.push(() => resolve({ ...noOutcome(), value: [] }))));
+  it('waits for a tool reading the request past the tool deadline, naming it, until 멈추기 ends the wait', async () => {
+    const late: ((value: unknown[]) => void)[] = [];
+    const run = vi.fn<Binding<ToolUnit>['run']>(async (_chat, _unit, _scope, event) => event.kind !== 'requesting' ? noOutcome() : new Promise((resolve) => late.push((value) => resolve({ ...noOutcome(), value }))));
     await server.withSession(async (session) => {
       const f = await toolChat(session);
       await appendUserMessage(session.store, f.chat, { id: crypto.randomUUID(), text: 'hello' });
@@ -795,14 +794,21 @@ describe('tool events through Scripts', () => {
       const turn = gatherTurn(session, f.chat, { kind: 'answer' });
       if (!turn || 'kind' in turn) throw new Error('fixture');
       const prompt = { messages: [{ role: 'user' as const, content: 'hello' }], parts: [{ from: { kind: 'script' as const }, tokens: 1, origin: 'message' }] };
+      const running: string[] = [];
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       try {
-        const requesting = session.scriptTurns.requesting(f.chat, turn, prompt);
+        const requesting = session.scriptTurns.requesting(f.chat, turn, prompt, new AbortController().signal, (name) => running.push(name));
         await vi.waitFor(() => expect(late).toHaveLength(1));
         await vi.advanceTimersByTimeAsync(5001);
-        expect((await requesting).messages).toEqual(prompt.messages);
-        expect(session.scriptInteractions.snapshot().notes).toContainEqual(expect.objectContaining({ kind: 'late', from: { kind: 'module', id: f.module } }));
-      } finally { vi.useRealTimers(); for (const resolve of late) resolve(); }
+        late[0]!([{ role: 'user', content: 'hello, noted' }]);
+        expect((await requesting).messages).toEqual([{ role: 'user', content: 'hello, noted' }]);
+        expect(running).toEqual(['메모']);
+        const stop = new AbortController();
+        const stopped = session.scriptTurns.requesting(f.chat, turn, prompt, stop.signal, () => {});
+        await vi.waitFor(() => expect(late).toHaveLength(2));
+        stop.abort();
+        expect((await stopped).messages).toEqual(prompt.messages);
+      } finally { vi.useRealTimers(); for (const resolve of late) resolve([]); }
     }, { run, close: () => {} });
   });
 

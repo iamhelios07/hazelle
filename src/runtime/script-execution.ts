@@ -23,13 +23,15 @@ type Units = { lua: ScriptUnit[]; event: Event } | { tool: ToolUnit; event: Tool
 
 const ownerOf = (units: Units): PackOwner | null => 'tool' in units ? { kind: 'module', id: units.tool.module } : null;
 
-// A tool's answer in a stage a turn or a display waits on (prompt, the edit stages); one that misses it is cut off and
-// the turn goes on.
+// A tool's answer in a stage a turn or a display waits on (prompt, sending, replying, showing); one that misses it is cut
+// off and the turn goes on. requesting has none (Chained.turn).
 export const TOOL_DEADLINE_MS = 5000;
 
 // A step of the tools' chain (ScriptExecution.chained). scope: the chat as the step sees it, after the writes of the tools
 // before it. answer: what a tool answered makes of the value, an Error when it cannot. quiet: nothing it does is saved.
-type Chained<T> = { event(value: T): ToolEvent; scope(writes: Writes): ChatScope; answer(answered: unknown, value: T): T | Error; quiet?: true };
+// turn: a step the turn waits on as on its pre agents, with no deadline: ended by 멈추기, told each tool's name as it
+// starts, and free to ask for a card.
+type Chained<T> = { event(value: T): ToolEvent; scope(writes: Writes): ChatScope; answer(answered: unknown, value: T): T | Error; quiet?: true; turn?: { signal: AbortSignal; running(name: string): void } };
 
 export class ScriptExecution {
   constructor(
@@ -70,13 +72,15 @@ export class ScriptExecution {
     let value = first;
     let writes: Writes = [];
     for (const unit of units) {
-      if (this.closing.aborted) break;
+      if (this.closing.aborted || step.turn?.signal.aborted) break;
       const deadline = new AbortController();
-      const stop = AbortSignal.any([this.closing, deadline.signal]);
-      const timer = setTimeout(() => deadline.abort(new ToolLate()), TOOL_DEADLINE_MS);
+      const stop = AbortSignal.any([this.closing, step.turn?.signal ?? deadline.signal]);
+      const timer = step.turn ? undefined : setTimeout(() => deadline.abort(new ToolLate()), TOOL_DEADLINE_MS);
+      const ended = step.turn ? undefined : () => clearTimeout(timer);
+      step.turn?.running(unit.tool.manifest.displayName);
       try {
         const run = { tool: unit, event: step.event(value) };
-        const outcome = step.quiet ? await this.run(chat, run, step.scope(writes), stop, true).finally(() => clearTimeout(timer)) : (await this.dispatch(chat, run, step.scope(writes), null, stop, () => clearTimeout(timer))).outcome;
+        const outcome = step.quiet ? await this.run(chat, run, step.scope(writes), stop, true).finally(ended) : (await this.dispatch(chat, run, step.scope(writes), null, stop, ended)).outcome;
         if (stop.aborted) continue;
         writes = [...writes, ...outcome.writes];
         const next = outcome.value === undefined ? value : step.answer(outcome.value, value);

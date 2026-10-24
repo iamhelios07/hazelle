@@ -14,7 +14,7 @@ import { languageLabel } from '../common/languages';
 import { withParticle } from '../common/particles';
 import { usageFacts, usageLine } from '../common/receipt';
 import { timeOfDay } from '../common/time';
-import { agentsWaiting, DISCOUNT_STOPPING, DISCOUNT_WAITING, polishingNow, PRE_READ_RETRYING, PRE_READ_WAITING, RETRYING } from '../common/words';
+import { agentsWaiting, DISCOUNT_STOPPING, DISCOUNT_WAITING, polishingNow, PRE_READ_RETRYING, PRE_READ_WAITING, RETRYING, toolWaiting } from '../common/words';
 import type { Preparing } from '../../runtime/turn-steps';
 import { SHORTCUTS, titled } from '../shortcuts';
 import { MASCOTS } from '../../model/mascot';
@@ -32,7 +32,7 @@ import { useReveal } from './useReveal';
 import { useSelectedPart } from './useSelectedPart';
 import { withOriginal } from './withOriginal';
 
-const preparingNote = (preparing: Preparing) => (preparing.step === 'agents' ? agentsWaiting(preparing) : preparing.retrying ? PRE_READ_RETRYING : PRE_READ_WAITING);
+const preparingNote = (preparing: Exclude<Preparing, { step: 'tools' }>) => (preparing.step === 'agents' ? agentsWaiting(preparing) : preparing.retrying ? PRE_READ_RETRYING : PRE_READ_WAITING);
 
 type Props = { row: MessageRow; modelMenu: MenuHandle; actions: ChatActions };
 
@@ -131,8 +131,9 @@ export const ChatMessage = memo(function ChatMessage(props: Props) {
       />
     );
   } else if (live && empty) {
-    const waiting = message.stopping ? DISCOUNT_STOPPING : message.batch ? DISCOUNT_WAITING : message.retrying ? RETRYING : message.preparing ? preparingNote(message.preparing) : null;
-    body = waiting ? <Waiting note={waiting} /> : <Elapsed thinking={Boolean(version.reasoning)} />;
+    const { preparing } = message;
+    const waiting = message.stopping ? DISCOUNT_STOPPING : message.batch ? DISCOUNT_WAITING : message.retrying ? RETRYING : preparing && preparing.step !== 'tools' ? preparingNote(preparing) : null;
+    body = waiting ? <Waiting note={waiting} /> : preparing?.step === 'tools' ? <Elapsed key={preparing.since} note={toolWaiting(preparing.running)} since={preparing.since} /> : <Elapsed note={version.reasoning ? '추론 중' : '기다리는 중'} />;
   } else if (failed) {
     body = (
       <>
@@ -376,12 +377,12 @@ function Remark({ remark, fresh, onSeen }: { remark: Stored<'remark'>; fresh: bo
   return <MascotRemark face={pictures.face} picture={pictures.expressions[expression]} name={MASCOTS[mascot].name} line={line} fresh={fresh} onSeen={onSeen} />;
 }
 
-// It counts from when this page began to wait.
-function Elapsed({ thinking }: { thinking: boolean }) {
-  const [start] = useState(Date.now);
+// It counts from since, or from when this page began to wait.
+function Elapsed({ note, since }: { note: string; since?: number }) {
+  const [mounted] = useState(Date.now);
   const now = useNow(Infinity);
-  const seconds = Math.floor((now - start) / 1000);
-  return <Waiting note={`${thinking ? '추론 중' : '기다리는 중'} · ${seconds}초`} />;
+  const seconds = Math.max(0, Math.floor((now - (since ?? mounted)) / 1000));
+  return <Waiting note={`${note} · ${seconds}초`} />;
 }
 
 export const speaker = (message: Message, character: { name: string } | null, me: { name: string } | null, modelName: string | null) =>

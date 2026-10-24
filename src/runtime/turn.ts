@@ -203,7 +203,8 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const fit = providerFit(route, settings, calibration.fit.allowance);
   const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools, scope, seed: reply.id, budget, fit, continuing: reply.continues !== null, answerInstruction: answerInstructionOf(session.store), memory, notes: agents.notes }, signal));
   if ('kind' in prompt) return { ...prompt, ...kept };
-  const requested = await session.scriptTurns.requesting(chat, turn, prompt);
+  const requested = await session.scriptTurns.requesting(chat, turn, prompt, signal, (name) => preparing({ step: 'tools', running: name, since: Date.now() }));
+  if (signal.aborted) return { kind: 'halted' };
   const rewritten = await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt, messages: requested.messages, fit }, signal));
   if ('kind' in rewritten) return { ...rewritten, ...kept };
   // After the scripts, so a bot's Lua sees the prompt as built and never the brief; before the forecast and the refit,

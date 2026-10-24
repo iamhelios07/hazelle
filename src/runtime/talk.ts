@@ -41,8 +41,8 @@ export type Turn = {
   whole?: true;
   // batch: waiting for a discount lane's batch (design §6.7), which answers whole. retrying: a try failed before any of it
   // came and is sent again (retry on failure). stopping: 멈추기 canceled the batch, which is asked about until it ends.
-  // preparing: a call the reply waits for runs first, 토큰 절약's (runtime/preread) or the pre agents' (runtime/agents),
-  // by the names of those still running out of how many run.
+  // preparing: a call the reply waits for runs first, 토큰 절약's (runtime/preread), the pre agents' (runtime/agents), by
+  // the names of those still running out of how many run, or a tool's reading the request (ScriptTurns.requesting).
   batch?: true;
   retrying?: true;
   stopping?: true;
