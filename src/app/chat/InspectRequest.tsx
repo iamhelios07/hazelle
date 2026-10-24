@@ -188,13 +188,12 @@ type NextCacheProps = { next: NonNullable<CacheNotes['next']>; recurrence: Cache
 function NextCache({ next: { forecast, diagnosis, cost: price, route }, recurrence, editor, onEdit }: NextCacheProps) {
   const store = useStore();
   const [open, setOpen] = useState<string | null>(null);
-  const cause = firstCause(diagnosis);
   const { against, written, tail, removed } = forecast;
   const off = against?.broken?.kind === 'off' ? { label: opens(MODEL_SETTINGS), onClick: () => navigate({ kind: 'model', ...refOf(route.connection.id, route.model) }) } : undefined;
   return (
     <Stack gap="group">
       <RecurrenceNote recurrence={recurrence} />
-      {against?.broken && <Callout tone="warn" action={off}>{[`${BROKEN}: ${why(against.broken, profileName(store, route))}`, cause, reads(against)].filter(Boolean).join(' ')}</Callout>}
+      {against?.broken && <Callout tone="warn" action={off}>{[`${BROKEN}: ${why(against.broken, profileName(store, route))}`, firstCause(diagnosis, against.broken), reads(against)].filter(Boolean).join(' ')}</Callout>}
       <Facts
         variant="tiles"
         items={[

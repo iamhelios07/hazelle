@@ -41,9 +41,12 @@ function cause(cause: CacheCause): { line: string; help: string | null } {
   }
 }
 
-// The first named cause, for the sentence beside the send button; none while it is worked out or nothing is named.
-export function firstCause(diagnosis: CacheDiagnosis | null | undefined): string | null {
-  const named = diagnosis?.parts.flatMap(({ causes }) => causes).find(({ kind }) => kind !== 'unknown');
+// The cause of the part broken names, for the sentence that names it; none for a break of the whole call (expired, model),
+// whose diagnosis still lists changed parts that are not why it reads nothing.
+export function firstCause(diagnosis: CacheDiagnosis | null | undefined, broken: CacheBreak): string | null {
+  if (!('from' in broken)) return null;
+  const part = diagnosis?.parts.find(({ kind, from, role }) => kind === broken.kind && role === broken.role && JSON.stringify(from) === JSON.stringify(broken.from));
+  const named = part?.causes.find(({ kind }) => kind !== 'unknown');
   return named ? cause(named).line : null;
 }
 

@@ -74,5 +74,5 @@ export function ChatCache({ cache, onOpen }: { cache: CacheNotes; onOpen: () => 
   if (cache.until === null || now >= cache.until) return null;
   const { next } = cache;
   const against = next?.forecast.against;
-  return <SendNote label={clock(cache.until - now)} title={TITLE} warning={next && against?.broken ? { words: BROKEN, why: [why(against.broken, profileName(store, next.route)), firstCause(next.diagnosis), reads(against)].filter(Boolean).join(' ') } : undefined} onClick={onOpen} />;
+  return <SendNote label={clock(cache.until - now)} title={TITLE} warning={next && against?.broken ? { words: BROKEN, why: [why(against.broken, profileName(store, next.route)), firstCause(next.diagnosis, against.broken), reads(against)].filter(Boolean).join(' ') } : undefined} onClick={onOpen} />;
 }
