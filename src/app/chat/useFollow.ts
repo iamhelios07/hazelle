@@ -15,14 +15,14 @@ export function anchorOf(messages: readonly { id: string; role: string }[], repl
 }
 
 // stay (보낸 자리에 멈추기): a reply starting here puts anchor at the top, and from then on nothing
-// the story gains moves the view, not even at its end, nor raises the pill, which only the reader's own scroll does,
-// until the pill takes it down (follow).
+// the story gains moves the view, not even at its end, nor raises the pill before a view's worth is unread below it,
+// until the pill takes it down (follow). The reader's own scroll raises the pill at once.
 export function useFollow(count: number, streaming: boolean, anchor: string | null, stay: boolean) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
   const held = useRef(false);
-  // Where toBottom left the view. Its scroll event comes after the story may have grown again, so it is not the reader
-  // leaving the bottom.
+  // Where toBottom, or the composer's room, left the view. Its scroll event comes after the story may have grown again,
+  // so it is not the reader leaving the bottom.
   const placed = useRef<number | null>(null);
   // A screen mounted while its reply is still being written (the chat left and come back to) treats that reply as
   // starting now, so stay holds it too.
@@ -90,10 +90,13 @@ export function useFollow(count: number, streaming: boolean, anchor: string | nu
   // scrolled: a scroll event, not a size the story took.
   function settle(scrolled: boolean) {
     const element = scrollRef.current!;
-    if (element.scrollTop === placed.current) return;
-    if (!scrolled && held.current) return;
-    placed.current = null;
-    const bottom = atEnd(element.scrollHeight - element.scrollTop - element.clientHeight, stick.current);
+    if (scrolled) {
+      if (element.scrollTop === placed.current) return;
+      placed.current = null;
+    }
+    const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
+    if (!scrolled && held.current && distance <= element.clientHeight) return;
+    const bottom = atEnd(distance, stick.current);
     stick.current = bottom;
     setAway(!bottom);
     if (bottom) setUnread(false);

@@ -50,7 +50,7 @@ for (const reply of ['stay', 'follow']) {
   });
 }
 
-test('a staying reply raises no pill as it grows under a reader at the end, and the composer growing keeps that end in view', async ({ page }) => {
+test('a staying reply raises the pill under a reader at the end only once a view is unread below, and the composer growing keeps that end in view', async ({ page }) => {
   await page.setViewportSize({ width: 1200, height: 800 });
   await page.goto(`${url}e2e/fixtures/scroll.html?reply=stay`);
   const frame = page.locator('main > div').filter({ has: page.locator('[data-key]') });
@@ -75,6 +75,11 @@ test('a staying reply raises no pill as it grows under a reader at the end, and 
   await frame.evaluate((element) => { element.scrollTop = element.scrollHeight; });
   await press('Type');
   expect(await distance()).toBeLessThanOrEqual(1);
+  await expect(pill).toHaveCount(0);
+  const height = await frame.evaluate((element) => element.clientHeight);
+  for (let grown = 0; grown <= height; grown += 100) await press('Grow');
+  await expect(pill).toHaveText('맨 아래로');
+  await frame.evaluate((element) => { element.scrollTop = element.scrollHeight; });
   await expect(pill).toHaveCount(0);
   await frame.evaluate((element) => { element.scrollTop -= 300; });
   await expect(pill).toHaveText('맨 아래로');
