@@ -7,9 +7,10 @@ import { useReadingRail } from '../story/readingRail';
 import styles from './ChatFrame.module.css';
 
 type Spacing = 'narrow' | 'normal' | 'wide';
+type ReadWidth = Spacing | 'widest';
 
 // How the story reads (읽기 설정). tokens.css holds each look; reply is how the view meets a reply (useFollow).
-export type Reading = { font: FontId; size: number; leading: Spacing; width: Spacing; reply: 'follow' | 'stay' };
+export type Reading = { font: FontId; size: number; leading: Spacing; width: ReadWidth; reply: 'follow' | 'stay' };
 
 // The look before any reading setting. The size is read from tokens.css, not repeated here, since Story keeps it
 // outside the chat.
@@ -22,7 +23,7 @@ export const readingDefault = (): Reading => ({
 });
 
 const LEADING: Record<Spacing, string> = { narrow: styles.leadingNarrow, normal: styles.leadingNormal, wide: styles.leadingWide };
-const WIDTH: Record<Spacing, string> = { narrow: styles.widthNarrow, normal: styles.widthNormal, wide: styles.widthWide };
+const WIDTH: Record<ReadWidth, string> = { narrow: styles.widthNarrow, normal: styles.widthNormal, wide: styles.widthWide, widest: styles.widthWidest };
 
 // The reading settings on the element a story sits in: the chat's column, or an exported log (LogExport).
 export const readingScope = ({ font, size, leading, width }: Reading) => ({ className: `${styles[FONTS[font].kind]} ${LEADING[leading]} ${WIDTH[width]}`, style: { ...faceStyle(font), '--reading-size': `${size}px` } as CSSProperties });

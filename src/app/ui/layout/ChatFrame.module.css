@@ -86,6 +86,10 @@
   --read-width: var(--read-wide);
 }
 
+.widthWidest {
+  --read-width: var(--read-widest);
+}
+
 .top {
   position: absolute;
   top: 0;

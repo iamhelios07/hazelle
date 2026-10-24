@@ -489,6 +489,7 @@
   --read-narrow: 700px;
   --read-normal: 800px;
   --read-wide: 960px;
+  --read-widest: 1200px;
   --read-gutter: 40px;
   /* The least space left of a story with a 삽화 stage (ChatFrame.tsx). */
   --read-stage-least: 64px;
