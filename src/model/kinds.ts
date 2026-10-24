@@ -13,7 +13,7 @@ import type { Profile } from './profile';
 import type { Share } from './share';
 import type { Prompt } from './prompt';
 import { SETTINGS_ID, type Settings } from './settings';
-import type { Tool, ToolChatData, ToolData } from './tool';
+import type { Tool, ToolChatData, ToolData, ToolFile } from './tool';
 import type { Stream } from './stream';
 import type { Ledger } from './usage';
 
@@ -22,6 +22,7 @@ export type Values = {
   module: Module;
   tool: Tool;
   tooldata: ToolData;
+  toolfile: ToolFile;
   toolchat: ToolChatData;
   folder: Folder;
   lore: Lore;
@@ -66,6 +67,7 @@ export const KINDS = {
   module: { parent: null },
   tool: { parent: 'module', file: true },
   tooldata: { parent: 'module' },
+  toolfile: { parent: 'module', file: true },
   toolchat: { parent: 'chat', owner: { field: 'module', kind: 'module' } },
   folder: { parent: null },
   lore: { parent: ['character', 'module', 'chat'] },
@@ -175,6 +177,7 @@ const SHAPES = {
   module: shape({ name: str, description: str, namespace: orNull(str), folder: optStr, regex: listOf(shape({ id: str })), triggers: listOf(shape({ id: str, kind: str, name: str })), toggles: listOf(toggleLine), loreFolders: listOf(shape({ id: str, name: str })) }),
   tool: shape({ manifest: shape({ api: (value) => value === 1, ...all(str, 'name', 'author', 'displayName', 'version', 'description'), uses: listOf((value) => value === 'model' || value === 'embed' || value === 'memory' || value === 'network'), page: orNull(shape({ label: str })), menu: listOf(shape({ id: str, label: str })), settings: listOf(shape({ key: str, type: str, label: str })) }), file: shape({ id: str, key: str }), size: num, settings: isRecord }),
   tooldata: shape({ key: str, value: (value) => value !== undefined }),
+  toolfile: shape({ key: str, size: num, file: shape({ id: str, key: str }) }),
   toolchat: shape({ module: str, key: orNull(str), value: (value) => value !== undefined }),
   folder: shape({ name: str, of: (value) => value === undefined || value === 'prompt' || value === 'module' || value === 'persona' }),
   lore: shape({

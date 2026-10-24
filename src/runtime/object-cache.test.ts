@@ -1,4 +1,4 @@
-import { ToolWrites } from './tools/store';
+import { ToolStorage } from './tools/store';
 import { serverBackend } from './backend';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Connection } from '../connectors/types';
@@ -722,7 +722,8 @@ it('fences a tool write across the merge pause when a restore ends the store', a
   await f.add('module', 'module', null, { name: 'tool', description: '', namespace: null, loreFolders: [], regex: [], triggers: [], toggles: [] });
   const store = await f.open();
   await store.pull();
-  const writes = new ToolWrites(store);
+  // A value its row holds reads and writes no file.
+  const writes = new ToolStorage({ store, files: null as never });
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
   try {
     const pending = writes.write('module', 'note', 'before restore');

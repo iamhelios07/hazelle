@@ -14,8 +14,13 @@ import type { ObjectStore } from '../store';
 import type { Write } from '../object-writes';
 
 export type ToolImport = { id: string; previous: Tool | null };
-export const TOOL_VALUE_BYTES = 512 * 1024;
-export const TOOL_DATA_BYTES = 4 * 1024 * 1024;
+// One row's value: a tool value kept in its row (tooldata), a chat's (toolchat). It is what a row's sealed body is known
+// to hold under BATCH_LIMITS.body.
+export const TOOL_ROW_BYTES = 512 * 1024;
+// A tool value past one row's is kept as a file (toolfile): a tooldata row is read at every account open, a file only
+// when the tool asks. Its bytes count toward the account's picture budget.
+export const TOOL_VALUE_BYTES = 4 * 1024 * 1024;
+export const TOOL_DATA_BYTES = 32 * 1024 * 1024;
 export const TOOL_CHAT_BYTES = 8 * 1024 * 1024;
 export const TOOL_KEY_CHARS = 256;
 const TOOL_WRITES_PER_MINUTE = 30;
@@ -23,6 +28,7 @@ export const TOOL_NOTICES_PER_MINUTE = 3;
 const WRITE_PAUSE_MS = 1000;
 const RATE_WINDOW_MS = 60_000;
 const encoder = new TextEncoder();
+const decoder = new TextDecoder('utf-8', { fatal: true });
 const dataBytes = (key: string, value: Json) => encoder.encode(key).byteLength + encoder.encode(JSON.stringify(value)).byteLength;
 
 export class ToolRate {
@@ -92,26 +98,53 @@ async function keyId(text: string): Promise<string> {
 export const toolDataId = (module: string, key: string) => keyId(`${module}\0${key}`);
 export const toolChatId = (module: string, chat: string, key: string | null) => keyId(key === null ? `${module}\0${chat}` : `${module}\0${chat}\0${key}`);
 
-export const toolData = (store: ObjectStore, module: string, key: string): Json | undefined =>
-  store.children('tooldata', module).find(({ value }) => value.key === key)?.value.value;
-export const toolKeys = (store: ObjectStore, module: string): string[] => store.children('tooldata', module).map(({ value }) => value.key);
+// The first part keeps it apart from every toolDataId and toolAssetId.
+export const toolFileId = (module: string, key: string) => keyId(`file\0${module}\0${key}`);
 
-export async function setToolData(store: ObjectStore, module: string, key: string, value: Json): Promise<ApiResult<unknown>> {
+const rowOf = (store: ObjectStore, module: string, key: string) => store.children('tooldata', module).find(({ value }) => value.key === key);
+const fileOf = (store: ObjectStore, module: string, key: string) => store.children('toolfile', module).find(({ value }) => value.key === key);
+
+export async function toolData({ store, files }: Pick<Session, 'store' | 'files'>, module: string, key: string): Promise<ApiResult<Json | undefined>> {
+  const row = rowOf(store, module, key);
+  if (row) return { ok: true, data: row.value.value };
+  const held = fileOf(store, module, key);
+  if (!held) return { ok: true, data: undefined };
+  const read = await files.read(held.value.file);
+  if (!read.ok) return read;
+  try {
+    return { ok: true, data: JSON.parse(decoder.decode(read.data)) as Json };
+  } catch {
+    return { ok: false, error: 'unreadable' };
+  }
+}
+export const toolKeys = (store: ObjectStore, module: string): string[] =>
+  [...store.children('tooldata', module), ...store.children('toolfile', module)].map(({ value }) => value.key);
+
+export async function setToolData({ store, files }: Pick<Session, 'store' | 'files'>, module: string, key: string, value: Json): Promise<ApiResult<unknown>> {
   if (!live(store.get('module', module))) return { ok: false, error: 'gone' };
   if (key.length > TOOL_KEY_CHARS) return { ok: false, error: 'key-too-long' };
   const bytes = dataBytes(key, value);
-  if (bytes > TOOL_VALUE_BYTES || bytes + store.children('tooldata', module).reduce((sum, row) => sum + (row.value.key === key ? 0 : dataBytes(row.value.key, row.value.value)), 0) > TOOL_DATA_BYTES) return { ok: false, error: 'too-large' };
-  const id = await toolDataId(module, key);
-  if (!store.get('tooldata', id)) {
-    const created = await store.create('tooldata', { key, value }, { id, parent: module });
-    if (created.ok || created.error !== 'conflict') return created;
+  const others = store.children('tooldata', module).reduce((sum, row) => sum + (row.value.key === key ? 0 : dataBytes(row.value.key, row.value.value)), 0)
+    + store.children('toolfile', module).reduce((sum, row) => sum + (row.value.key === key ? 0 : encoder.encode(row.value.key).byteLength + row.value.size), 0);
+  if (bytes > TOOL_VALUE_BYTES || bytes + others > TOOL_DATA_BYTES) return { ok: false, error: 'too-large' };
+  const writes: Write[] = [];
+  if (bytes <= TOOL_ROW_BYTES) writes.push({ type: 'restore', kind: 'tooldata', id: await toolDataId(module, key), parent: module, value: { key, value } });
+  else {
+    const json = encoder.encode(JSON.stringify(value));
+    const saved = await files.save([json]);
+    if (!saved.ok) return saved;
+    const [file] = saved.data;
+    if (!file) return { ok: false, error: 'files-full' };
+    writes.push({ type: 'restore', kind: 'toolfile', id: await toolFileId(module, key), parent: module, value: { key, size: json.byteLength, file } });
   }
-  return store.update('tooldata', id, () => ({ key, value }));
+  const other = bytes <= TOOL_ROW_BYTES ? fileOf(store, module, key) : rowOf(store, module, key);
+  if (other) writes.push({ type: 'remove', id: other.id });
+  return store.batch(writes);
 }
 
-export async function deleteToolData(store: ObjectStore, module: string, key: string): Promise<ApiResult<null>> {
-  const id = await toolDataId(module, key);
-  return store.get('tooldata', id) ? store.remove(id) : { ok: true, data: null };
+export async function deleteToolData(store: ObjectStore, module: string, key: string): Promise<ApiResult<unknown>> {
+  const held = [rowOf(store, module, key), fileOf(store, module, key)].flatMap((row) => row ? [{ type: 'remove' as const, id: row.id }] : []);
+  return held.length ? store.batch(held) : { ok: true, data: null };
 }
 
 // A tool's picture is an asset of its module: gone with it, counted in the account's picture budget, listed on the module
@@ -155,7 +188,7 @@ export async function saveToolChat(store: ObjectStore, module: string, chat: str
   const rows = new Map(existing.map((row) => [row.value.key, row.value.value]));
   const changed = new Map<string | null, Json | undefined>(data);
   if (data.some(([key]) => key.length > TOOL_KEY_CHARS)) return { ok: false, error: 'key-too-long' };
-  if (data.some(([key, value]) => value !== undefined && dataBytes(key, value) > TOOL_VALUE_BYTES)) return { ok: false, error: 'too-large' };
+  if (data.some(([key, value]) => value !== undefined && dataBytes(key, value) > TOOL_ROW_BYTES)) return { ok: false, error: 'too-large' };
   if (badges.length) {
     const held: Badges = { ...(rows.get(null) as Badges | undefined) };
     for (const { message, version, text } of badges) {
@@ -187,8 +220,10 @@ export const toolsOf = (store: ObjectStore, chat: Chat): ToolUnit[] => packsOf(s
 type PendingData = { value: Json | undefined; waiting: { resolve(): void; reject(error: Error): void }[] };
 type DataQueue = { pending: Map<string, PendingData>; timer: ReturnType<typeof setTimeout> | null; running: boolean };
 
-export class ToolWrites {
+export class ToolStorage {
   private readonly queues = new Map<string, DataQueue>();
+  // A file's value by its key, read once: a file is named by its sealed bytes, so a value written again names another.
+  private readonly files = new Map<string, { id: string; read: Promise<ApiResult<Json | undefined>> }>();
   private closed = false;
   private readonly rate = new ToolRate(TOOL_WRITES_PER_MINUTE);
 
@@ -196,11 +231,22 @@ export class ToolWrites {
     if (this.closed) throw new Error('closed');
     if (!this.rate.take(module)) throw new Error('too-many-writes');
   }
-  constructor(private readonly store: ObjectStore) {}
+  constructor(private readonly session: Pick<Session, 'store' | 'files'>) {}
+
+  async read(module: string, key: string): Promise<Json | undefined> {
+    const slot = `${module}\0${key}`;
+    const file = fileOf(this.session.store, module, key)?.value.file.id;
+    if (file === undefined) this.files.delete(slot);
+    else if (this.files.get(slot)?.id !== file) this.files.set(slot, { id: file, read: toolData(this.session, module, key) });
+    const read = await (this.files.get(slot)?.read ?? toolData(this.session, module, key));
+    if (read.ok) return read.data;
+    if (this.files.get(slot)?.id === file) this.files.delete(slot);
+    throw new Error(read.error);
+  }
 
   async write(module: string, key: string, value: Json | undefined): Promise<void> {
     // The merge pause is part of the write's original timeline, not a new write after an account restore.
-    const result = await this.store.pinned(() => this.enqueue(module, key, value));
+    const result = await this.session.store.pinned(() => this.enqueue(module, key, value));
     if (result && !result.ok) throw new Error(result.error);
   }
 
@@ -251,7 +297,7 @@ export class ToolWrites {
         try {
           if (this.closed) throw new Error('closed');
           this.take(module);
-          const result = value === undefined ? await deleteToolData(this.store, module, key) : await setToolData(this.store, module, key, value);
+          const result = value === undefined ? await deleteToolData(this.session.store, module, key) : await setToolData(this.session, module, key, value);
           if (!result.ok) throw new Error(result.error);
           for (const waiter of waiting) waiter.resolve();
         } catch (error) {

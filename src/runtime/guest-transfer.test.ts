@@ -34,7 +34,7 @@ import { openSession } from './session';
 import { ObjectStore } from './store';
 import { exportBackup, readBackup, restoreBackup } from './testing/backup';
 import type { BackupOutput } from './backup-zip';
-import { importTool, readToolAsset, saveToolAsset, saveToolChat, setToolData, toolChatId, toolDataId } from './tools/store';
+import { importTool, readToolAsset, saveToolAsset, saveToolChat, setToolData, toolChatId, toolData, toolDataId, toolFileId, TOOL_ROW_BYTES } from './tools/store';
 
 let app: Awaited<ReturnType<typeof testApp>>;
 let password: Awaited<ReturnType<typeof passwordCredential>>;
@@ -230,11 +230,12 @@ it('remaps inventory ids regardless of field names, preserving only engine seeds
     { type: 'create', kind: 'ledger', id: ledgerId(call), parent: SETTINGS_ID, value: { type: 'call', at: 1, call: { id: call, connection: connectionId, model: providerModel, modelName: 'Model', source: 'Connection', usage: null, cost: null, calibration: unavailableCalibration('historical') }, chat: source.chat, character: source.character } },
     { type: 'create', kind: 'module', id: module, parent: null, value: { name: 'Tool', description: '', namespace: null, loreFolders: [], toggles: [], regex: [], triggers: [] } },
   ], undefined, { unheld: true });
-  expect((await setToolData(source.store, module, toolKey, {
+  expect((await setToolData(source, module, toolKey, {
     message: source.message, nested: [{ unrecognized: STARTER_ID }, FIRST_PROFILE_ID, SETTINGS_ID],
     [source.character]: { self: await toolDataId(module, toolKey), unrelated: call },
     text: source.character, seed: source.message, replyId: source.message, fragment: `prefix ${source.character}`,
   })).ok).toBe(true);
+  expect((await setToolData(source, module, 'big', 'g'.repeat(TOOL_ROW_BYTES))).ok).toBe(true);
   expect((await source.store.withChat(source.chat, () => saveToolChat(source.store, module, source.chat,
     [[toolKey, { replyId: source.message }]], [{ message: source.message, version: source.message, text: 'A badge' }],
   ))).ok).toBe(true);
@@ -315,6 +316,8 @@ it('remaps inventory ids regardless of field names, preserving only engine seeds
   expect(data.key).toBe(toolKey);
   expect(data.value).toEqual({ message: message.id, nested: [{ unrecognized: prompt.id }, profile.id, SETTINGS_ID], [character.id]: { self: await toolDataId(importedModule, toolKey), unrelated: call }, text: character.id, seed: message.id, replyId: message.id, fragment: `prefix ${source.character}` });
   expect(target.get('toolchat', await toolChatId(importedModule, chat.id, toolKey))?.value).toEqual({ module: importedModule, key: toolKey, value: { replyId: message.id } });
+  expect(target.get('toolfile', await toolFileId(importedModule, 'big'))?.value.key).toBe('big');
+  expect(await toolData({ store: target, files: new Files(serverBackend(), target) }, importedModule, 'big')).toEqual({ ok: true, data: 'g'.repeat(TOOL_ROW_BYTES) });
   lease.release();
   expect(await serverBackend().readFile(source.ref.id)).toEqual(sealedPicture);
   expect(target.children('avatar', character.id)[0]!.value.file).toEqual(source.ref);

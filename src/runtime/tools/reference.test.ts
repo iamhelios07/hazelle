@@ -58,7 +58,7 @@ it('runs the reference notepad page and background, saves through merged storage
       const note = pages[0]!.body.children.find(({ tag }) => tag === 'textarea')!;
       note.value = 'A note kept in the vault';
       note.dispatchEvent(new Event('input'));
-      await vi.waitFor(() => expect(toolData(session.store, module, 'note')).toBe(note.value), { timeout: 3000 });
+      await vi.waitFor(async () => expect(await toolData(session, module, 'note')).toEqual({ ok: true, data: note.value }), { timeout: 3000 });
       await vi.waitFor(() => expect(pages[0]!.body.children.at(-1)!.textContent).toBe('저장했어요'));
       await setToolSettings(session, module, { title: 'My notes' });
       await vi.waitFor(() => expect(pages[0]!.body.children[0]!.textContent).toBe('My notes'));

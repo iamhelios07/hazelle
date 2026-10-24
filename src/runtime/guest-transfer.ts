@@ -11,7 +11,7 @@ import { deviceCache } from './device-cache';
 import { clearGuestStore, guestBackend, guestBoardSecret } from './guest-store';
 import { SEEDED } from './backup-core';
 import { inOrder, transfers } from './files';
-import { toolAssetId, toolChatId, toolDataId } from './tools/store';
+import { toolAssetId, toolChatId, toolDataId, toolFileId } from './tools/store';
 
 export type GuestTransferStep = { kind: 'objects' | 'pictures'; done: number; total: number };
 export type GuestTransferOptions = { signal?: AbortSignal; progress?: (step: GuestTransferStep) => void };
@@ -247,7 +247,7 @@ async function copyAddresses(guest: Guest, accountId: string, source: Backend, h
   const kinds = new Map(held.rows.map(({ id, kind }) => [id, kind]));
   const key = await objectKey(guest.vaultKey);
   // Resolve these before copying any page: a summary on an earlier page can refer to one on a later page.
-  for (const kind of ['tooldata', 'toolchat', 'asset']) {
+  for (const kind of ['tooldata', 'toolfile', 'toolchat', 'asset']) {
     if (!held.rows.some((row) => row.kind === kind && row.body !== null)) continue;
     let since = 0;
     for (;;) {
@@ -259,6 +259,7 @@ async function copyAddresses(guest: Guest, accountId: string, source: Backend, h
         const value = await openObject(key, guest.accountId, row, row.body!);
         if (!isRecord(value)) return failed('unreadable');
         if (kind === 'tooldata') replacements.set(row.id, await toolDataId(copyId(row.parent!), value.key as string));
+        else if (kind === 'toolfile') replacements.set(row.id, await toolFileId(copyId(row.parent!), value.key as string));
         else if (kind === 'toolchat') replacements.set(row.id, await toolChatId(copyId(value.module as string), copyId(row.parent!), value.key as string | null));
         else if (kinds.get(row.parent!) === 'module' && row.id === await toolAssetId(row.parent!, value.name as string)) {
           replacements.set(row.id, await toolAssetId(copyId(row.parent!), value.name as string));
@@ -300,7 +301,7 @@ function remap(value: unknown, replacements: ReadonlyMap<string, string>, kind: 
   // Engine seeds keep their original roll; tool keys keep the literal lookup name used by tools/store's hashes.
   if ((kind === 'chat' || kind === 'entry') && path.length === 1 && field === 'seed') return value;
   if (kind === 'stream' && path.join('.') === 'for.continues.seed') return value;
-  if ((kind === 'tooldata' || kind === 'toolchat') && path.length === 1 && field === 'key') return value;
+  if ((kind === 'tooldata' || kind === 'toolfile' || kind === 'toolchat') && path.length === 1 && field === 'key') return value;
   if (typeof value === 'string') return replacements.get(value) ?? value;
   if (Array.isArray(value)) return value.map((item: unknown) => remap(item, replacements, kind, [...path, '*']));
   if (!isRecord(value)) return value;

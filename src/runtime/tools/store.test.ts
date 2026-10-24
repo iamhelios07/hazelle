@@ -5,7 +5,7 @@ import { setModuleDeleted } from '../modules';
 import { purgeNow } from '../removal';
 import { exportBackup, readBackup, restoreBackup } from '../testing/backup';
 import { testServer } from '../testing';
-import { deleteToolData, importTool, readToolAsset, saveToolAsset, saveToolChat, setToolData, setToolSettings, toolBadges, toolChatData, toolChatKeys, toolData, toolDataId, toolKeys, TOOL_CHAT_BYTES, TOOL_DATA_BYTES, TOOL_KEY_CHARS, TOOL_VALUE_BYTES, undoToolImport } from './store';
+import { deleteToolData, importTool, readToolAsset, saveToolAsset, saveToolChat, setToolData, setToolSettings, toolBadges, toolChatData, toolChatKeys, toolData, toolDataId, toolKeys, TOOL_CHAT_BYTES, TOOL_DATA_BYTES, TOOL_KEY_CHARS, TOOL_ROW_BYTES, TOOL_VALUE_BYTES, undoToolImport } from './store';
 import type { Files } from '../files';
 
 const server = testServer();
@@ -24,7 +24,7 @@ describe('tool storage', () => {
     if (!added.ok) throw new Error(added.error);
     const module = added.data.id;
     expect((await setToolSettings({ store }, module, { title: 'mine' })).ok).toBe(true);
-    await setToolData(store, module, 'note', { text: 'hello' });
+    await setToolData({ store, files }, module, 'note', { text: 'hello' });
     await store.update('module', module, (current) => ({ ...current, botModels: true }));
     const updated = await importTool(store, files, source('1.1', '//@uses model\n'));
     if (!updated.ok) throw new Error(updated.error);
@@ -32,7 +32,7 @@ describe('tool storage', () => {
     expect(store.list('module')).toHaveLength(1);
     expect(store.get('module', module)!.value.botModels).toBeUndefined();
     expect(store.get('tool', toolId(module))!.value.settings).toEqual({ title: 'mine' });
-    expect(toolData(store, module, 'note')).toEqual({ text: 'hello' });
+    expect(await toolData({ store, files }, module, 'note')).toEqual({ ok: true, data: { text: 'hello' } });
     await store.update('module', module, (current) => ({ ...current, botModels: false }));
     await importTool(store, files, source('1.2', '//@uses model\n'));
     expect(store.get('module', module)!.value.botModels).toBe(false);
@@ -66,13 +66,15 @@ describe('tool storage', () => {
     const added = await importTool(store, files, source());
     if (!added.ok) throw new Error(added.error);
     const module = added.data.id;
-    await setToolData(store, module, 'note', 'kept');
+    await setToolData({ store, files }, module, 'note', 'kept');
+    await setToolData({ store, files }, module, 'big', 'x'.repeat(TOOL_ROW_BYTES));
     await setModuleDeleted(store, module, Date.now());
     expect(await importTool(store, files, source('2'))).toEqual({ ok: false, error: 'gone' });
     expect(store.list('module')).toHaveLength(1);
     expect((await purgeNow(store, unswept, 'module', module, () => {})).ok).toBe(true);
     expect(store.list('tool')).toEqual([]);
     expect(store.list('tooldata')).toEqual([]);
+    expect(store.list('toolfile')).toEqual([]);
   });
 
   it('addresses keys deterministically, updates and deletes, and enforces value and total limits', async () => {
@@ -83,20 +85,31 @@ describe('tool storage', () => {
     expect(toolId('01234567-89ab-4def-8123-456789abcdef')).toBe('fedcba98-89ab-4def-8123-456789abcdef');
     expect(await toolDataId(module, 'a')).toBe(await toolDataId(module, 'a'));
     expect(await toolDataId(module, 'a')).not.toBe(await toolDataId(module, 'b'));
-    expect((await setToolData(store, module, 'a', 1)).ok).toBe(true);
-    expect((await setToolData(store, module, 'a', 2)).ok).toBe(true);
-    expect(toolData(store, module, 'a')).toBe(2);
+    const session = { store, files };
+    expect((await setToolData(session, module, 'a', 1)).ok).toBe(true);
+    expect((await setToolData(session, module, 'a', 2)).ok).toBe(true);
+    expect(await toolData(session, module, 'a')).toEqual({ ok: true, data: 2 });
     expect(toolKeys(store, module)).toEqual(['a']);
     await deleteToolData(store, module, 'a');
-    expect(toolData(store, module, 'a')).toBeUndefined();
-    expect((await setToolData(store, module, 'a', '가'.repeat(TOOL_VALUE_BYTES / 3))).ok).toBe(false);
-    expect(await setToolData(store, module, 'k'.repeat(TOOL_KEY_CHARS + 1), 1)).toEqual({ ok: false, error: 'key-too-long' });
-    expect(await setToolData(store, module, '가'.repeat(TOOL_KEY_CHARS), 'x'.repeat(TOOL_VALUE_BYTES - 2))).toEqual({ ok: false, error: 'too-large' });
+    expect(await toolData(session, module, 'a')).toEqual({ ok: true, data: undefined });
+    expect((await setToolData(session, module, 'a', '가'.repeat(TOOL_VALUE_BYTES / 3))).ok).toBe(false);
+    expect(await setToolData(session, module, 'k'.repeat(TOOL_KEY_CHARS + 1), 1)).toEqual({ ok: false, error: 'key-too-long' });
+    expect(await setToolData(session, module, '가'.repeat(TOOL_KEY_CHARS), 'x'.repeat(TOOL_VALUE_BYTES - 2))).toEqual({ ok: false, error: 'too-large' });
+    // Past one row's bytes a value moves to a file, and back into its row once it fits again.
+    const big = 'x'.repeat(TOOL_ROW_BYTES);
+    expect((await setToolData(session, module, 'big', big)).ok).toBe(true);
+    expect(store.list('tooldata')).toEqual([]);
+    expect(await toolData(session, module, 'big')).toEqual({ ok: true, data: big });
+    expect(toolKeys(store, module)).toEqual(['big']);
+    expect((await setToolData(session, module, 'big', 'small')).ok).toBe(true);
+    expect(store.list('toolfile')).toEqual([]);
+    expect(await toolData(session, module, 'big')).toEqual({ ok: true, data: 'small' });
+    await deleteToolData(store, module, 'big');
     const value = 'x'.repeat(TOOL_VALUE_BYTES - 3);
-    for (let i = 0; i < TOOL_DATA_BYTES / TOOL_VALUE_BYTES; i++) expect((await setToolData(store, module, String(i), value)).ok).toBe(true);
-    expect(await setToolData(store, module, 'extra', 1)).toEqual({ ok: false, error: 'too-large' });
-    expect((await setToolData(store, module, '0', 1)).ok).toBe(true);
-    expect((await setToolData(store, module, 'extra', 1)).ok).toBe(true);
+    for (let i = 0; i < TOOL_DATA_BYTES / TOOL_VALUE_BYTES; i++) expect((await setToolData(session, module, String(i), value)).ok).toBe(true);
+    expect(await setToolData(session, module, 'extra', 1)).toEqual({ ok: false, error: 'too-large' });
+    expect((await setToolData(session, module, '0', 1)).ok).toBe(true);
+    expect((await setToolData(session, module, 'extra', 1)).ok).toBe(true);
   });
 
   it('keeps a picture as one asset of its module by its hash, again after the user deletes it, and reads it for that module only', async () => {
@@ -142,8 +155,9 @@ describe('tool storage', () => {
     expect((await saveToolChat(store, module, chat, [['a', undefined]], [{ message: 'm1', version: 'v1', text: null }])).ok).toBe(true);
     expect(toolChatKeys(store, module, chat)).toEqual(['b']);
     expect(toolBadges(store, module, chat)).toEqual({});
-    const value = 'x'.repeat(TOOL_VALUE_BYTES - 3);
-    const full = Array.from({ length: TOOL_CHAT_BYTES / TOOL_VALUE_BYTES }, (_, i): [string, string] => [String(i), value]);
+    const value = 'x'.repeat(TOOL_ROW_BYTES - 3);
+    const full = Array.from({ length: TOOL_CHAT_BYTES / TOOL_ROW_BYTES }, (_, i): [string, string] => [String(i), value]);
+    expect(await saveToolChat(store, module, chat, [['one', 'x'.repeat(TOOL_ROW_BYTES)]], [])).toEqual({ ok: false, error: 'too-large' });
     expect(await saveToolChat(store, module, chat, full, [])).toEqual({ ok: false, error: 'too-large' });
     expect(await saveToolChat(store, module, chat, [['k'.repeat(TOOL_KEY_CHARS + 1), 1]], [])).toEqual({ ok: false, error: 'key-too-long' });
     lease.release();
@@ -163,7 +177,8 @@ describe('tool storage', () => {
     const imported = source();
     const added = await importTool(old.store, old.files, imported);
     if (!added.ok) throw new Error(added.error);
-    await setToolData(old.store, added.data.id, 'note', 'backup note');
+    await setToolData(old, added.data.id, 'note', 'backup note');
+    await setToolData(old, added.data.id, 'big', 'b'.repeat(TOOL_ROW_BYTES));
     const chat = crypto.randomUUID();
     await old.store.create('chat', { title: null, character: null, models: {} }, { id: chat });
     const lease = old.store.retainChat(chat, { created: true });
@@ -181,7 +196,8 @@ describe('tool storage', () => {
     expect(tool.manifest).toEqual(imported.manifest);
     expect(tool.settings).toEqual({ title: '메모' });
     expect(await restored.files.read(tool.file)).toEqual({ ok: true, data: imported.bytes });
-    expect(toolData(restored.store, added.data.id, 'note')).toBe('backup note');
+    expect(await toolData(restored, added.data.id, 'note')).toEqual({ ok: true, data: 'backup note' });
+    expect(await toolData(restored, added.data.id, 'big')).toEqual({ ok: true, data: 'b'.repeat(TOOL_ROW_BYTES) });
     const reopened = restored.store.retainChat(chat);
     await reopened.ready;
     expect(toolChatData(restored.store, added.data.id, chat, 'index')).toBe('chat note');

@@ -25,7 +25,7 @@ import type { Session } from '../session';
 import type { MenuItem, ToolHosts } from './facade';
 import { isFrameTool, type Context, type Entry, type Frame } from './frame-state';
 import { decodeState, encodeState } from './state';
-import { readToolAsset, saveToolAsset, setToolSettings, toolChatData, toolChatKeys, toolData, toolKeys, ToolWrites } from './store';
+import { readToolAsset, saveToolAsset, setToolSettings, toolChatData, toolChatKeys, toolKeys, ToolStorage } from './store';
 
 // The sandbox refuses story changes in these too (sandbox/api.ts); a page that posts its own outcome is not trusted to.
 const STORY_LOCKED = new Set<ToolEvent['kind']>(['change', 'branch', 'replying', 'sending', 'requesting', 'showing']);
@@ -118,18 +118,18 @@ type FrameRuntime = {
 };
 
 export class ToolApi {
-  private readonly writes: ToolWrites;
+  private readonly storage: ToolStorage;
   private called: ToolHosts = new Map();
 
   constructor(private readonly session: Pick<Session, 'store' | 'files'>, private readonly services: ToolServices, private readonly runtime: FrameRuntime, private readonly notify: () => void) {
-    this.writes = new ToolWrites(session.store);
+    this.storage = new ToolStorage(session);
   }
 
   readonly hosts = () => this.called;
 
-  close() { this.writes.close(); }
+  close() { this.storage.close(); }
 
-  cancel(module: string) { this.writes.cancel(module); }
+  cancel(module: string) { this.storage.cancel(module); }
 
   private context(frame: Frame, event: unknown): Context {
     if (event !== undefined) {
@@ -193,13 +193,13 @@ export class ToolApi {
         this.services.journal.report(entry.chat ?? '', { errors: [], missing: RISU_DECLINED.has(first) ? [] : [first], trace: { entries: [log], omitted: 0 } }, from);
         return;
       }
-      case 'storage.get': if (typeof first === 'string') return toolData(this.session.store, entry.module, first); break;
+      case 'storage.get': if (typeof first === 'string') return this.storage.read(entry.module, first); break;
       case 'storage.keys': return toolKeys(this.session.store, entry.module);
-      case 'storage.set': if (typeof first === 'string' && isJson(second)) return this.writes.write(entry.module, first, second); break;
-      case 'storage.delete': if (typeof first === 'string') return this.writes.write(entry.module, first, undefined); break;
+      case 'storage.set': if (typeof first === 'string' && isJson(second)) return this.storage.write(entry.module, first, second); break;
+      case 'storage.delete': if (typeof first === 'string') return this.storage.write(entry.module, first, undefined); break;
       case 'assets.save': {
         if (!(first instanceof Uint8Array)) break;
-        this.writes.take(entry.module);
+        this.storage.take(entry.module);
         const saved = await saveToolAsset(this.session.store, this.session.files, entry.module, new Uint8Array(first));
         if (!saved.ok) throw new Error(saved.error);
         return saved.data;
@@ -214,7 +214,7 @@ export class ToolApi {
         const [, at, bytes, caption] = args;
         if (typeof first !== 'string' || !isRecord(at) || typeof at.id !== 'string' || typeof at.version !== 'string' || !(bytes instanceof Uint8Array) || (caption !== null && typeof caption !== 'string')) break;
         if (!this.runtime.allowed(first, entry.module)) throw new ToolStopped();
-        this.writes.take(entry.module);
+        this.storage.take(entry.module);
         const tool = { module: entry.module, name: live(this.session.store.get('module', entry.module))!.value.name };
         const saved = await attachIllustration(this.session, first, tool, { message: at.id, version: at.version }, new Uint8Array(bytes), caption);
         if (!saved.ok) throw new Error(saved.error);
@@ -236,7 +236,7 @@ export class ToolApi {
       case 'settings.set': {
         const field = entry.tool.manifest.settings.find(({ key }) => key === first);
         if (!field || !fieldValue(field, second)) break;
-        this.writes.take(entry.module);
+        this.storage.take(entry.module);
         const saved = await setToolSettings(this.session, entry.module, { [field.key]: second });
         if (!saved.ok) throw new Error(saved.error);
         return;
@@ -354,13 +354,13 @@ export class ToolApi {
     const data = [...new Map(value.data)];
     const badges = [...new Map(value.badges.map(({ index, text }) => [index, text]))].map(([index, text]) => ({ index, text }));
     // A page's write takes its share of the write rate before it is converted (pageWrite).
-    if (context.event && (data.length || badges.length || value.lore.length)) this.writes.take(frame.entry.module);
+    if (context.event && (data.length || badges.length || value.lore.length)) this.storage.take(frame.entry.module);
     const story = context.event && STORY_LOCKED.has(context.event) ? { edits: [], added: [] } : { edits: edits.map((edit) => ({ ...edit, wrote: state!.wrote[edit.index + greeting]! })), added: value.added.map((item) => ({ ...item, before: null })) };
     return { ...noOutcome(), value: value.value, handled: true, writes: [...[...new Map(value.writes)].map(([key, json]): [string, string] => [toolVar(frame.entry.tool.manifest, key), encodeState(json)]), ...new Map(value.variables)], ...story, lore: value.lore.map(chatLore), tool: { data, badges } };
   }
 
   async pageWrite(frame: Frame, value: unknown) {
-    this.writes.take(frame.entry.module);
+    this.storage.take(frame.entry.module);
     const context = this.context(frame, undefined);
     const outcome = await this.convert(frame, context, value);
     if (!frame.closing.signal.aborted) await this.services.pages.pageWrite(context.chat, frame.entry.module, outcome);

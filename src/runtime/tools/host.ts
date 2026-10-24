@@ -10,6 +10,7 @@ import type { ScriptOutcome } from '../lua/event';
 import { aborted, noOutcome, ToolStopped, ToolStuck, until, type Binding } from '../script-binding';
 import type { Session } from '../session';
 import type { StoreChange } from '../object-index';
+import type { ObjectStore } from '../store';
 import { Heartbeat } from '../worker';
 import { ToolApi, header, type ToolServices } from './api';
 import type { MenuItem, ToolFrames, ToolMenu, ToolPage, ToolSlot, Tools } from './facade';
@@ -21,6 +22,12 @@ const EVENTS = new Set<EventName>(['reply', 'replying', 'sending', 'requesting',
 const IDLE_MS = 10 * 60_000;
 const STUCK_MS = 8000;
 const describe = (error: unknown) => error instanceof Error ? error.message : String(error);
+// A stored value as a change compares it: a file's by its id, which its bytes name, so 4 MB is never stringified.
+const storedAt = (store: ObjectStore, kind: 'tooldata' | 'toolfile', id: string) => {
+  if (kind === 'tooldata') { const row = store.get('tooldata', id)?.value; return row && { key: row.key, json: JSON.stringify(row.value) }; }
+  const row = store.get('toolfile', id)?.value;
+  return row && { key: row.key, json: row.file.id };
+};
 const framesOf = (entry: Entry) => [...(entry.background ? [entry.background] : []), ...entry.pages];
 const eventFields = (event: ToolEvent): Partial<Extract<Down, { kind: 'event' }>> => {
   switch (event.kind) {
@@ -233,7 +240,7 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
     if (current) return current;
     const entry: Entry = {
       module, tool, settings: JSON.stringify(tool.settings), background: null, pages: new Set(), chats: new Set(), idle: null,
-      data: new Map(store.children('tooldata', module).map(({ id, value }) => [id, { key: value.key, json: JSON.stringify(value.value) }])),
+      data: new Map((['tooldata', 'toolfile'] as const).flatMap((kind) => store.children(kind, module).map(({ id }) => [id, storedAt(store, kind, id)!] as const))),
       chat: null, menu: [], actions: [], shown: false, slot: null, leaving: false,
     };
     this.entries.set(module, entry);
@@ -424,10 +431,9 @@ export class ToolHost implements Tools, Binding<ToolUnit, ToolEvent, ToolReach> 
       this.settingsChanged(entry, tool);
       const keys = new Set<string>();
       for (const change of changes) {
-        if (change.kind !== 'tooldata' || change.parent !== entry.module) continue;
-        const value = this.session.store.get('tooldata', change.id)?.value;
+        if ((change.kind !== 'tooldata' && change.kind !== 'toolfile') || change.parent !== entry.module) continue;
         const previous = entry.data.get(change.id);
-        const current = value && { key: value.key, json: JSON.stringify(value.value) };
+        const current = storedAt(this.session.store, change.kind, change.id);
         if (current?.json === previous?.json && current?.key === previous?.key) continue;
         if (previous) keys.add(previous.key);
         if (current) { keys.add(current.key); entry.data.set(change.id, current); }

@@ -21,7 +21,7 @@ import { upsertChatLore } from '../lore';
 import { inProcessRisu, inProcessTools } from '../testing/tool-transport';
 import { ToolHost } from './host';
 import { UNLOAD_MS, type OpenFrame } from './frame';
-import { importTool, setToolData, setToolSettings, toolData, toolDataId } from './store';
+import { importTool, setToolData, setToolSettings, toolData, toolDataId, TOOL_ROW_BYTES } from './store';
 
 const server = testServer();
 function withTools(test: (session: Session, connect: (open: OpenFrame) => ToolHost) => Promise<void>) {
@@ -133,7 +133,7 @@ it('refuses undeclared spending and forged event contexts, and isolates module s
     await vi.waitFor(() => expect(frame.host.sent).toContainEqual(expect.objectContaining({ kind: 'answer', call: 900, ok: false })));
     const other = await session.store.create('module', { name: 'other', description: '', namespace: null, loreFolders: [], regex: [], triggers: [], toggles: [] });
     if (!other.ok) throw new Error('fixture');
-    await setToolData(session.store, other.data.id, 'secret', 'private');
+    await setToolData(session, other.data.id, 'secret', 'private');
     expect(await frame.api!.storage.get('secret')).toBeUndefined();
   } finally { host.close(); }
 }));
@@ -400,15 +400,15 @@ describe('tool storage transport', () => {
       await host.warm(f.chat);
       await vi.waitFor(() => expect(transport.frames.every((frame) => frame.api !== null)).toBe(true));
       const [a, b] = transport.frames.map((frame) => frame.api!);
-      const writes = vi.spyOn(session.store, 'create');
+      const writes = vi.spyOn(session.store, 'batch');
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
       const first = a!.storage.set('note', 'first');
       const last = b!.storage.set('note', 'last');
       await vi.advanceTimersByTimeAsync(1001);
       vi.useRealTimers();
       await Promise.all([first, last]);
-      expect(toolData(session.store, f.module, 'note')).toBe('last');
-      expect(writes.mock.calls.filter(([kind]) => kind === 'tooldata')).toHaveLength(1);
+      expect(await toolData(session, f.module, 'note')).toEqual({ ok: true, data: 'last' });
+      expect(writes.mock.calls.filter(([batch]) => batch.some((write) => 'kind' in write && write.kind === 'tooldata'))).toHaveLength(1);
       await vi.waitFor(() => expect(changes).toHaveLength(2));
       expect(changes).toEqual([['note'], ['note']]);
       const object = await toolDataId(f.module, 'note');
@@ -481,7 +481,7 @@ it('ignores malformed outcomes and all messages from a frame after it has closed
     host.close();
     receive(new MessageEvent('message', { data: { kind: 'call', call: 90, method: 'storage.set', args: ['after-close', true] } }));
     await Promise.resolve();
-    expect(toolData(session.store, f.module, 'after-close')).toBeUndefined();
+    expect(await toolData(session, f.module, 'after-close')).toEqual({ ok: true, data: undefined });
   } finally { release?.(); host.close(); }
 }));
 
@@ -500,10 +500,16 @@ it('notifies a running tool after pulling a data change written on another devic
     await host.warm(chat);
     const peer = await account.open();
     await peer.pull();
-    expect((await setToolData(peer, added.data.id, 'remote', { note: 'from another device' })).ok).toBe(true);
+    expect((await setToolData({ store: peer, files: account.files }, added.data.id, 'remote', { note: 'from another device' })).ok).toBe(true);
     expect(await account.store.pull()).toBeNull();
     await vi.waitFor(() => expect(changes).toHaveBeenCalledWith(['remote']));
     expect(await transport.frames[0]!.api!.storage.get('remote')).toEqual({ note: 'from another device' });
+    const big = 'r'.repeat(TOOL_ROW_BYTES);
+    expect((await setToolData({ store: peer, files: account.files }, added.data.id, 'remote', big)).ok).toBe(true);
+    expect(await account.store.pull()).toBeNull();
+    await vi.waitFor(() => expect(changes).toHaveBeenCalledTimes(2));
+    expect(changes).toHaveBeenLastCalledWith(['remote']);
+    expect(await transport.frames[0]!.api!.storage.get('remote')).toBe(big);
   } finally { host.close(); }
 });
 
@@ -623,7 +629,7 @@ it('runs a new chat\'s frame tool from its draft before the first save, and lets
     expect(host.menusOf(draft).map((menu) => menu.module)).toEqual([module]);
     const leave = host.draft(chat, draft);
     await vi.waitFor(() => expect(host.items(module)).toEqual([{ id: 'cast', label: 'Cast' }]));
-    await setToolData(session.store, module, 'touch', 1);
+    await setToolData(session, module, 'touch', 1);
     expect(host.frames().get(module)?.chat).toBe(chat);
     await server.hold(session.store, chat);
     await startChat(session.store, chat, draft, null);
@@ -735,7 +741,7 @@ it('answers a frame tool\'s unload callbacks while its port stays open, then clo
     await host.warm(chat);
     await vi.waitFor(() => expect(host.hears(module, 'menu')).toBe(true));
     await setModuleAlways(session.store, module, false);
-    await vi.waitFor(() => expect(toolData(session.store, module, 'plugin:last')).toBe('saved'), { timeout: 3000 });
+    await vi.waitFor(async () => expect(await toolData(session, module, 'plugin:last')).toEqual({ ok: true, data: 'saved' }), { timeout: 3000 });
     await vi.waitFor(() => expect(transport.frames[0]!.host.closed).toBe(true));
   } finally { host.close(); }
 }));
