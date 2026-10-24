@@ -1,5 +1,5 @@
 import { Ban, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, ImageIcon, Languages, Scissors, Square, TriangleAlert, WandSparkles } from 'lucide-react';
-import { createContext, Fragment, useContext, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { Button } from '../controls/Button';
 import { Facts, type FactItem } from '../collections/Facts';
 import { IconButton } from '../controls/IconButton';
@@ -196,13 +196,16 @@ export function Usage({ lead, parts, facts, more }: { lead: string | null; parts
       <button type="button" className={styles.usageLine} aria-expanded={open} onClick={() => setOpen(!open)}>
         {lead && <span className={styles.usageLead}>{lead}</span>}
         {parts.map(({ label, value }, index) => (
-          <Fragment key={label ?? value}>
-            {index > 0 && <span aria-hidden>·</span>}
-            <span>
-              {label && `${label} `}
-              <span className={styles.usageValue}>{value}</span>
-            </span>
-          </Fragment>
+          // The dot ends the fact before it, so a line the strip wraps onto never starts with one.
+          <span key={label ?? value} className={styles.usagePart}>
+            {label && `${label} `}
+            <span className={styles.usageValue}>{value}</span>
+            {index < parts.length - 1 && (
+              <span className={styles.usageDot} aria-hidden>
+                ·
+              </span>
+            )}
+          </span>
         ))}
         <Icon icon={open ? ChevronUp : ChevronDown} size="sm" />
       </button>
