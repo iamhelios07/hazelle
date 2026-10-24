@@ -7,7 +7,7 @@ import { DetailFold } from '../common/DetailFold';
 import { filled, typedText, useTypedNumber } from '../common/typed';
 import { count, readCount } from '../common/typedNumber';
 import { useAutosave } from '../common/useAutosave';
-import { ANSWER_INSTRUCTION_LABEL, LORE_SCAN_WORDS, MODEL_SETTINGS, RETRY_COUNT, RETRY_HELP } from '../common/words';
+import { ANSWER_INSTRUCTION_LABEL, CHAT_DETAIL, LORE_SCAN_WORDS, MODEL_SETTINGS, RETRY_COUNT, RETRY_HELP } from '../common/words';
 import { useSettings, useStore } from '../session';
 import { useToast } from '../toast';
 import { NumberInput, SettingRow, Stepper, Switch, TextField } from '../ui';
@@ -26,35 +26,52 @@ export function ChatDetailDefaults() {
     />
   );
   return (
-    <DetailFold set={[retries, loreBudget, loreDepth, loreRecursive, loreFullWord, answerInstruction, usageShown].filter((value) => value !== undefined).length}>
-      <SettingRow
-        label={RETRY_COUNT}
-        help={`${RETRY_HELP} API 연결이나 ${MODEL_SETTINGS}마다 따로 정할 수도 있어요.`}
-        changed={retries !== undefined}
-        control={
-          <Stepper
-            label={RETRY_COUNT}
-            less="한 번 덜 보내기"
-            more="한 번 더 보내기"
-            value={retries ?? RETRIES}
-            min={0}
-            max={RETRY_MOST}
-            onChange={(next) => void setSharedRetries(store, next).then((result) => result.ok || toast.failed(result))}
-          />
-        }
-      />
-      <SharedLoreNumber field="tokenBudget" changed={loreBudget !== undefined} />
-      {flag('recursive', loreRecursive)}
-      <SharedLoreNumber field="scanDepth" changed={loreDepth !== undefined} />
-      {flag('fullWordMatching', loreFullWord)}
-      <AnswerInstructionField changed={answerInstruction !== undefined} />
-      <SettingRow
-        label={USAGE_SHOWN}
-        help="응답 아래에 비용과 토큰을 한 줄로 보여 줘요. 누르면 자세한 내용이 펼쳐져요."
-        changed={usageShown !== undefined}
-        control={<Switch label={USAGE_SHOWN} checked={usageShown !== undefined} onChange={(on) => void setUsageShown(store, on).then((result) => result.ok || toast.failed(result))} />}
-      />
-    </DetailFold>
+    <DetailFold
+      set={[retries, loreBudget, loreDepth, loreRecursive, loreFullWord, answerInstruction, usageShown].filter((value) => value !== undefined).length}
+      sections={[
+        {
+          title: CHAT_DETAIL.reply,
+          rows: (
+            <>
+              <SettingRow
+                label={RETRY_COUNT}
+                help={`${RETRY_HELP} API 연결이나 ${MODEL_SETTINGS}마다 따로 정할 수도 있어요.`}
+                changed={retries !== undefined}
+                control={
+                  <Stepper
+                    label={RETRY_COUNT}
+                    less="한 번 덜 보내기"
+                    more="한 번 더 보내기"
+                    value={retries ?? RETRIES}
+                    min={0}
+                    max={RETRY_MOST}
+                    onChange={(next) => void setSharedRetries(store, next).then((result) => result.ok || toast.failed(result))}
+                  />
+                }
+              />
+              <AnswerInstructionField changed={answerInstruction !== undefined} />
+              <SettingRow
+                label={USAGE_SHOWN}
+                help="응답 아래에 비용과 토큰을 한 줄로 보여 줘요. 누르면 자세한 내용이 펼쳐져요."
+                changed={usageShown !== undefined}
+                control={<Switch label={USAGE_SHOWN} checked={usageShown !== undefined} onChange={(on) => void setUsageShown(store, on).then((result) => result.ok || toast.failed(result))} />}
+              />
+            </>
+          ),
+        },
+        {
+          title: CHAT_DETAIL.lore,
+          rows: (
+            <>
+              <SharedLoreNumber field="tokenBudget" changed={loreBudget !== undefined} />
+              {flag('recursive', loreRecursive)}
+              <SharedLoreNumber field="scanDepth" changed={loreDepth !== undefined} />
+              {flag('fullWordMatching', loreFullWord)}
+            </>
+          ),
+        },
+      ]}
+    />
   );
 }
 
