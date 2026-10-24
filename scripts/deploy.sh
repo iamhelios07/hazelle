@@ -7,9 +7,10 @@
 # Needs: a clean tree with the tag, gh logged in, docker, terraform state in infra/ (for the address), and ssh as root
 # to the machine. Order: the release's digest and archive are checked against the tag's commit; then one ssh session,
 # holding an flock on /run/hazelle-deploy.lock for an hour at most, reads the running digest, has the machine pull the
-# image and the running app capture a pre-upgrade backup generation that the copier sends off-site, records the running
-# digest and that generation in /etc/hazelle/previous, changes the image, and is done when the app container runs the
-# selected digest and /api/health answers ok. Without the lock a second deploy could read the running digest, wait,
+# image and the running app capture a pre-upgrade backup generation that the copier sends off-site, waits up to 5
+# minutes for no reply to be running, records the running digest and that generation in /etc/hazelle/previous, changes
+# the image, stops the old app and prints its drain outcome, and is done when the app container runs the selected digest
+# and /api/health answers ok. Without the lock a second deploy could read the running digest, wait,
 # and capture its generation after the first deploy migrated the database: a pair the recorded digest cannot restore.
 # Exit 3: no pre-upgrade backup, nothing changed. Exit 4: the new image is selected but does not run healthy; run this
 # again to retry the start, or recover as below. Exit 5: another deploy holds the lock, nothing changed.
@@ -52,7 +53,8 @@ REPO=ghcr.io/jiniill/hazelle
 tag=${1:?usage: scripts/deploy.sh <tag> | --prepare}
 host=$(terraform -chdir=infra output -raw ip)
 
-# The functions the transaction starts with. health_ok: the app answers 2xx with "ok":true. wait_healthy <seconds>.
+# The functions the transaction starts with. health_has <text>: the app answers 2xx holding text. health_ok: holding
+# "ok":true. wait_health <seconds> <text>.
 # running <image>: the app container runs that image.
 # capture: a pre-upgrade backup generation, off-site; sets generation. It asks the running app for one (node.ts's
 # SIGUSR2 handler), follows its log for the outcome, has the copier send the generation off-site and checks its copied
@@ -62,13 +64,14 @@ host=$(terraform -chdir=infra output -raw ip)
 # minutes; an older one would widen the writes a rollback loses.
 LIB='
 PREPARED_FOR=900
-health_ok() {
+health_has() {
   body=$(timeout 10 hazelle-compose exec -T app wget -qO- -T 5 http://127.0.0.1:8080/api/health 2>/dev/null) &&
-    case $body in *"\"ok\":true"*) ;; *) false ;; esac
+    case $body in *"$1"*) ;; *) false ;; esac
 }
-wait_healthy() {
-  deadline=$(($(date +%s) + $1))
-  until health_ok; do
+health_ok() { health_has "\"ok\":true"; }
+wait_health() {
+  deadline=$(($(date +%s) + $2))
+  until health_has "$1"; do
     [ "$(date +%s)" -lt "$deadline" ] || return 1
     sleep 3
   done
@@ -127,7 +130,7 @@ if [ "$selected" = "$image" ]; then
   code=4 summary="$image is selected but does not run healthy; see the header for recovery"
   if ! { running "$image" && health_ok; }; then
     timeout 300 hazelle-compose up -d app >&2
-    wait_healthy 300 && running "$image" || exit 1
+    wait_health "\"ok\":true" 300 && running "$image" || exit 1
   fi
   echo "deploy: $image is selected and runs healthy" >&2
   exit 0
@@ -151,13 +154,23 @@ else
   capture
 fi
 
+# A running reply holds the drain of the old app until it ends or the 60 s run out, and every request meanwhile waits in
+# Caddy past the browser 15 s. 300 s is the longest reply measured; past it the drain cuts what still runs.
+quiet_from=$(date +%s)
+wait_health "\"liveCalls\":0," 300 || echo "deploy: replies still running after 300 s; the drain cuts any past its 60 s" >&2
+echo "deploy: waited $(($(date +%s) - quiet_from)) s for no reply to run" >&2
+
 code=1 summary="could not record the rollback pair or select $image; nothing changed"
 printf "%s\n%s\n" "$selected" "$generation" >/etc/hazelle/previous
 sed -i "s|^HAZELLE_IMAGE=.*|HAZELLE_IMAGE=$image|" /etc/hazelle/env
 code=4 summary="$image is selected but did not start; see the header for recovery"
+# Stopped here, not by up: up removes the old container and its drain outcome with it.
+old=$(hazelle-compose ps -q app)
+timeout 120 docker stop -t 90 "$old" >/dev/null
+docker logs --tail 50 "$old" 2>&1 | grep -e "\"event\":\"draining\"" -e "\"event\":\"stopped\"" >&2 || true
 timeout 300 hazelle-compose up -d app >&2
 summary="$image does not run healthy within 5 minutes; see the header for recovery"
-wait_healthy 300 && running "$image" || exit 1
+wait_health "\"ok\":true" 300 && running "$image" || exit 1
 echo "deploy: running $image (previous $selected, pre-upgrade generation $generation)" >&2
 '
 
