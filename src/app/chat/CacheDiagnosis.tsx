@@ -1,4 +1,6 @@
 import type { CacheBreak, CacheCause, CacheDiagnosis, CacheRecurrence, CacheShortfall } from '../../model/cache';
+import { shortfallPlace } from '../../runtime/cache-diagnosis';
+import type { LogEntry } from '../../runtime/request-log';
 import { tokens } from '../common/receipt';
 import type { ReactNode } from 'react';
 import { Hint, Row, Stack, Tag, Text, TextDiff } from '../ui';
@@ -97,7 +99,7 @@ const breakLabel = (broken: CacheBreak) => ('from' in broken ? `${partName(broke
 
 // Shown only once a pattern can show: two sends that broke.
 export function RecurrenceNote({ recurrence }: { recurrence: CacheRecurrence }) {
-  const { considered, broken, causes } = recurrence;
+  const { considered, broken, short, causes } = recurrence;
   if (broken < 2) return null;
   const top = [...causes].sort((a, b) => b.count - a.count).slice(0, 3);
   return (
@@ -107,16 +109,29 @@ export function RecurrenceNote({ recurrence }: { recurrence: CacheRecurrence }) 
         {top.map(({ cause: each, count }, index) => (
           <Tag key={index}>{`${breakLabel(each)} ${count}번`}</Tag>
         ))}
+        {short > 0 && <Tag>{`${SHORT} ${short}번`}</Tag>}
       </Row>
     </Stack>
   );
 }
 
-export function ShortfallNote({ shortfall }: { shortfall: CacheShortfall }) {
+const SHORT = '예상보다 적게 읽음';
+// More than the two sends a pattern takes: this one warns about the next send, from what the provider alone saw.
+const STREAK = 3;
+
+// The warning for a send on connection, when its latest replies kept reading less than forecast.
+export function shortStreak({ streak }: CacheRecurrence, connection: string): { words: string; why: string } | null {
+  if (!streak || streak.connection !== connection || streak.count < STREAK) return null;
+  return { words: SHORT, why: `이 연결은 최근 ${streak.count}번 연속 예상보다 적게 읽었어요. 제공자가 캐시를 비우거나 요청을 바꾸는 것 같아요.` };
+}
+
+export function ShortfallNote({ shortfall, entry }: { shortfall: CacheShortfall; entry: LogEntry | null }) {
+  const place = shortfallPlace(entry, shortfall);
   return (
     <Text variant="note">
       {`예상보다 적게 읽었어요. 약 ${tokens(Math.round(shortfall.expected))} 토큰을 읽을 줄 알았는데 ${tokens(shortfall.actual)} 토큰만 읽었어요.`}
-      <Hint label="예상보다 적게 읽음">요청은 직전과 같았지만 제공사가 캐시를 먼저 비웠거나, 캐시가 없는 다른 서버가 받았을 수 있어요. 앱에서는 막을 수 없어요.</Hint>
+      {place && ` '${partName(place.from, place.role)}' 부분 근처부터 읽지 못했어요.`}
+      <Hint label={SHORT}>앱이 보낸 요청대로라면 더 읽혀야 했어요. 제공자가 캐시를 먼저 비웠거나, 캐시가 없는 다른 서버가 받았거나, 제공자가 요청에 글을 끼워 넣었을 수 있어요. 끼워 넣은 글은 앱에 보이지 않아요. 계속 그렇다면 다른 연결로 보내 보세요.</Hint>
     </Text>
   );
 }

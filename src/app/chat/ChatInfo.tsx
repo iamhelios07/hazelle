@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { calls, handEdited, shown, type AgentRun, type Receipt, type Version } from '../../model/chat';
+import { cacheShortfall } from '../../runtime/cache-diagnosis';
 import { setAgentMemory } from '../../runtime/chat-log';
+import type { LogEntry } from '../../runtime/request-log';
 import { describeReplyError } from '../common/failure';
 import { ago } from '../common/time';
 import { useChatMemory, useSession, useStore } from '../session';
 import { useToast } from '../toast';
 import { Breakdown, Button, Callout, Disclosure, Empty, Facts, Section, SidePanel, Stack, Switcher, Tabs, Text, TextField } from '../ui';
+import { ShortfallNote } from './CacheDiagnosis';
 import { SentLore, SentMemory, SentRequest, SentResponse } from './ChatSent';
 import { money } from '../common/money';
 import { cost, finish, seconds, speed, tokens } from '../common/receipt';
@@ -114,7 +117,7 @@ export function ChatInfo({ id: chat, shelf, messages, infoPick, tab: picked, onT
             {earlier.length > 0 && (
               <Text variant="note">{`${earlier.length + 1}번 호출해서 이어 쓴 응답이에요. 비용은 호출할 때마다 발생해요.`}</Text>
             )}
-            <Call receipt={receipt} />
+            <Call receipt={receipt} entry={entry} />
             {receipt.preread && <PrereadCall preread={receipt.preread} />}
             {chat && receipt.agents?.map((run) => <AgentCall key={`${run.stage}:${run.agent}`} chat={chat} version={version} run={run} />)}
             {translated && <TranslationCall receipt={translated} />}
@@ -218,8 +221,9 @@ function AgentCall({ chat, version, run: { agent, name, stage, receipt, note, me
   );
 }
 
-function Call({ receipt }: { receipt: Receipt }) {
+function Call({ receipt, entry }: { receipt: Receipt; entry: LogEntry | null }) {
   const usage = receipt.usage;
+  const short = cacheShortfall(receipt);
   const cached = usage?.cachedInputTokens ?? null;
   const input = usage?.inputTokens ?? null;
   const fresh = input !== null && cached !== null ? input - cached : null;
@@ -261,6 +265,7 @@ function Call({ receipt }: { receipt: Receipt }) {
       ) : (
         <Empty variant="section">제공자가 사용량을 알려 주지 않았어요.</Empty>
       )}
+      {short?.short && <ShortfallNote shortfall={short} entry={entry} />}
       <Facts variant="tiles" items={[...(usage ? [] : [{ label: '토큰', value: UNKNOWN, tone: 'muted' as const }]), ...outcomeFacts(receipt)]} />
       <Fitting receipt={receipt} />
     </>

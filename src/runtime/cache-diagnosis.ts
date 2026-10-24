@@ -1,7 +1,7 @@
-import { cacheRecurrence as recurrence, cacheShortfall as shortfall } from '../engine/cache-history';
+import { cacheRecurrence as recurrence, cacheShortfall as shortfall, readReach } from '../engine/cache-history';
 import type { Assembled } from '../engine/pipeline';
 import type { ChatScope } from '../engine/render';
-import type { CacheDiagnosis, CacheText, Forecast } from '../model/cache';
+import type { CacheDiagnosis, CacheShortfall, CacheText, Forecast } from '../model/cache';
 import { calls, type Message, type Receipt } from '../model/chat';
 import type { Evaluation } from './evaluation';
 import type { LogEntry } from './request-log';
@@ -25,7 +25,17 @@ export function cacheRecurrence(messages: Message[]) {
       }
     }
   }
-  return recurrence([...receipts.values()].sort((a, b) => b.at - a.at || b.order - a.order).map(({ receipt }) => receipt));
+  return recurrence([...receipts.values()].sort((a, b) => b.at - a.at || b.order - a.order).map(({ receipt }) => ({ forecast: receipt.forecast, connection: receipt.connection, short: cacheShortfall(receipt)?.short ?? null })));
 }
 
 export const cacheShortfall = (receipt: Receipt) => shortfall(receipt.forecast, receipt.usage?.cachedInputTokens ?? null, receipt.calibration ? tokenProjection(receipt.calibration, receipt.usage).ratio : null);
+
+// Where the provider stopped reading, from the call's wire text this page kept; null without it (a reload) or when the
+// read covers the whole send.
+export function shortfallPlace(entry: LogEntry | null, short: CacheShortfall) {
+  const { wire, prompt } = entry ?? {};
+  if (!wire || !prompt) return null;
+  const parts = wire.map(({ index }) => ({ ...prompt.parts[index]!, role: prompt.messages[index]!.role }));
+  const at = readReach(parts, short);
+  return at === null ? null : parts[at]!;
+}

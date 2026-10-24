@@ -6,7 +6,7 @@ import { tokens } from '../common/receipt';
 import { MODEL_SETTINGS } from '../common/words';
 import { useStore } from '../session';
 import { SendNote } from '../ui';
-import { firstCause } from './CacheDiagnosis';
+import { firstCause, shortStreak } from './CacheDiagnosis';
 import { partName } from './ChatSent';
 import type { CacheNotes } from './useSendNotes';
 
@@ -74,5 +74,6 @@ export function ChatCache({ cache, onOpen }: { cache: CacheNotes; onOpen: () => 
   if (cache.until === null || now >= cache.until) return null;
   const { next } = cache;
   const against = next?.forecast.against;
-  return <SendNote label={clock(cache.until - now)} title={TITLE} warning={next && against?.broken ? { words: BROKEN, why: [why(against.broken, profileName(store, next.route)), firstCause(next.diagnosis, against.broken), reads(against)].filter(Boolean).join(' ') } : undefined} onClick={onOpen} />;
+  const warning = next && against?.broken ? { words: BROKEN, why: [why(against.broken, profileName(store, next.route)), firstCause(next.diagnosis, against.broken), reads(against)].filter(Boolean).join(' ') } : next && shortStreak(cache.recurrence, next.route.connection.id);
+  return <SendNote label={clock(cache.until - now)} title={TITLE} warning={warning || undefined} onClick={onOpen} />;
 }

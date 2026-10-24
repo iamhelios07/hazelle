@@ -11,7 +11,7 @@ import { MODEL_SETTINGS, opens, PRE_READ, UNKNOWN } from '../common/words';
 import { useSession, useStore } from '../session';
 import { navigate } from '../shell/router';
 import { Button, Callout, CodeBlock, Disclosure, Empty, Facts, Gauge, List, ListItem, Row, Section, Stack, Text } from '../ui';
-import { BrokenPartView, breakKind, diagnosed, firstCause, RecurrenceNote } from './CacheDiagnosis';
+import { BrokenPartView, breakKind, diagnosed, firstCause, RecurrenceNote, shortStreak } from './CacheDiagnosis';
 import { BROKEN, profileName, reads, why } from './ChatCache';
 import { partName, RequestView } from './ChatSent';
 import { HookList, STAGES } from './InspectScripts';
@@ -189,10 +189,12 @@ function NextCache({ next: { forecast, diagnosis, cost: price, route }, recurren
   const store = useStore();
   const [open, setOpen] = useState<string | null>(null);
   const { against, written, tail, removed } = forecast;
+  const streak = shortStreak(recurrence, route.connection.id);
   const off = against?.broken?.kind === 'off' ? { label: opens(MODEL_SETTINGS), onClick: () => navigate({ kind: 'model', ...refOf(route.connection.id, route.model) }) } : undefined;
   return (
     <Stack gap="group">
       <RecurrenceNote recurrence={recurrence} />
+      {streak && <Callout tone="warn">{streak.why}</Callout>}
       {against?.broken && <Callout tone="warn" action={off}>{[`${BROKEN}: ${why(against.broken, profileName(store, route))}`, firstCause(diagnosis, against.broken), reads(against)].filter(Boolean).join(' ')}</Callout>}
       <Facts
         variant="tiles"

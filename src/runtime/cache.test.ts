@@ -6,7 +6,8 @@ import { describe, expect, it } from 'vitest';
 import type { CacheFacts } from '../connectors/registry';
 import type { Message, Receipt } from '../model/chat';
 import type { Role } from '../model/prompt';
-import { cacheRecurrence, cacheShortfall } from './cache-diagnosis';
+import { cacheRecurrence, cacheShortfall, shortfallPlace } from './cache-diagnosis';
+import type { LogEntry } from './request-log';
 import { forecast, lastCache, type CacheSend, type Prior } from './cache';
 
 // Each message counts 10 tokens and is named by its text, which is its hash; a trailing ✓ puts a cache point after it.
@@ -143,6 +144,22 @@ describe('lastCache', () => {
     const result = cacheRecurrence(messages);
     expect(result).toMatchObject({ considered: 9, missing: 1, broken: 8 });
     expect(result.causes.map(({ cause, count }) => [cause.kind, count])).toEqual([['changed', 7], ['moved', 1]]);
+  });
+
+  it('counts provider shortfalls with the breaks and keeps the newest run of them on one connection', () => {
+    const read = (at: number, connection: string, cached: number | null, broken: Receipt['forecast'] = { read: 1000, of: 1000, broken: null }) =>
+      reply(at, receipt({ id: `call-${at}`, connection, forecast: broken, usage: { inputTokens: 1000, outputTokens: 10, reasoningTokens: null, cachedInputTokens: cached, cacheWriteInputTokens: null } }));
+    const messages = [read(1, 'c1', 0), read(2, 'c1', 1000), read(3, 'c1', 0), read(4, 'c1', null), read(5, 'c1', 0, { read: 0, of: 1000, broken: { kind: 'expired' } }), read(6, 'c1', 100)];
+    expect(cacheRecurrence(messages)).toMatchObject({ considered: 6, broken: 4, short: 3, streak: { connection: 'c1', count: 2 } });
+    expect(cacheRecurrence([...messages, read(7, 'c2', 0)]).streak).toEqual({ connection: 'c2', count: 1 });
+  });
+
+  it('names the first part a shortfall left out, at the part boundary nearest the calibrated read', () => {
+    const entry = { wire: [{ content: 'a', index: 1 }, { content: 'b', index: 0 }, { content: 'c', index: 2 }], prompt: { messages: [{ role: 'system' }, { role: 'system' }, { role: 'user' }], parts: [{ from: { kind: 'block', name: 'B', slot: null }, tokens: 500 }, { from: { kind: 'block', name: 'A', slot: null }, tokens: 1000 }, { from: { kind: 'block', name: 'C', slot: 'chat' }, tokens: 300 }] } } as unknown as LogEntry;
+    expect(shortfallPlace(entry, { expected: 2700, actual: 2220, ratio: 1.5, short: true })?.from).toMatchObject({ name: 'C' });
+    expect(shortfallPlace(entry, { expected: 2700, actual: 0, ratio: 1.5, short: true })?.from).toMatchObject({ name: 'A' });
+    expect(shortfallPlace(entry, { expected: 2700, actual: 2700, ratio: 1.5, short: true })).toBeNull();
+    expect(shortfallPlace({ ...entry, wire: undefined }, { expected: 2700, actual: 0, ratio: 1.5, short: true })).toBeNull();
   });
 
   it('compares reported cache reads in the calibrated units and does not call tokenizer noise an eviction', () => {
