@@ -30,8 +30,8 @@ export const readingScope = ({ font, size, leading, width }: Reading) => ({ clas
 // Which side of the story the stage stands on.
 export type StageSide = 'right' | 'left';
 
-// Where the story has a stage beside it at least half its text's width, its side: a message's 삽화 stands there
-// (MarginPictures), not in the text. Outside a chat there is no stage.
+// Where the story has a stage for 삽화 beside it at least half its text's width, its side: a message's 삽화 stands
+// there (MarginPictures), not in the text. A stage standing only for the portrait leaves them in the text.
 const MarginRoom = createContext<StageSide | false>(false);
 export const useMarginRoom = () => useContext(MarginRoom);
 
@@ -53,7 +53,8 @@ type Props = {
   edge?: ReactNode;
   reading: Reading;
   hideHeader: boolean;
-  // The chat has 삽화, or will: its story makes room beside it for them where the page is wide enough.
+  // The chat has 삽화, or will, and the reader keeps them beside the text: its story makes room beside it for them where
+  // the page is wide enough.
   stage: boolean;
   side: StageSide;
   // The character's picture, standing on the stage where no 삽화 do.
@@ -169,7 +170,7 @@ export function ChatFrame({ back, title, actions, children, above, footer, dockR
         </div>
         <div className={styles.scroll} ref={scrollRef} onScroll={scrolled}>
           <div ref={contentRef} className={styles.content}>
-            <MarginRoom.Provider value={staged && side}>{children}</MarginRoom.Provider>
+            <MarginRoom.Provider value={staged && stage && side}>{children}</MarginRoom.Provider>
           </div>
         </div>
         {staged && !stage && (

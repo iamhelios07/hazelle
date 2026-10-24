@@ -152,13 +152,18 @@ export function DisplayScreen({ back }: { back: Back | null }) {
             control={<Switch label="가로 이미지는 꽉 채우기" checked={display.wideFill} onChange={(wideFill) => changeDisplay({ wideFill })} />}
           />
           <SettingRow
+            label="삽화를 본문에 넣기"
+            help="넓은 화면에서도 삽화를 옆에 띄우지 않고 그 문단 바로 뒤에 넣어요."
+            control={<Switch label="삽화를 본문에 넣기" checked={display.inlineIllustrations} onChange={(inlineIllustrations) => changeDisplay({ inlineIllustrations })} />}
+          />
+          <SettingRow
             label="이미지 위치"
             help="넓은 화면에서 삽화와 캐릭터 이미지를 채팅 어느 쪽에 둘지 정해요."
             control={<ChoiceGroup layout="fit" label="이미지 위치" options={choices(SIDE)} value={display.pictureSide} onChange={(pictureSide) => changeDisplay({ pictureSide })} />}
           />
           <SettingRow
             label="캐릭터 이미지 크게 보기"
-            help="넓은 화면에서 채팅 옆에 캐릭터 이미지를 크게 띄워요. 삽화를 쓰는 채팅에선 삽화가 그 자리를 써요."
+            help="넓은 화면에서 채팅 옆에 캐릭터 이미지를 크게 띄워요. 삽화를 옆에 띄우는 채팅에선 삽화가 그 자리를 써요."
             control={<Switch label="캐릭터 이미지 크게 보기" checked={display.portrait} onChange={(portrait) => changeDisplay({ portrait })} />}
           />
         </SettingGroup>

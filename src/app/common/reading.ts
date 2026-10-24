@@ -43,17 +43,17 @@ export function parseReading(stored: string, fallback: Reading): Reading {
 // pictureWidest: the width no picture-only line's picture is drawn wider than, in percent of the text's width, unless
 // the character sets its own (Pictures.widest). wideFill: a picture wider than tall fills the text's width anyway.
 // The default draws every picture as before the cap (user, 2026-10-17).
-// quotes (대사 모양), pictureSide and portrait: reading habits, so no preset sets them.
+// quotes (대사 모양), pictureSide, inlineIllustrations and portrait: reading habits, so no preset sets them.
 // portrait: the character's picture on the stage, only in a chat without 삽화: the stage is theirs (user, 2026-10-16).
 // follow (시스템 따라 바꾸기): a preset id for each system mode and the mode last applied, so a reload keeps what was
 // changed by hand since and only the next switch puts the preset back (user, 2026-10-20).
-export type Display = Scheme & { follow: Follow | null; quotes: QuoteShape; hideHeader: boolean; foldComposer: boolean; enterSends: boolean; hidePictures: boolean; pictureWidest: number; wideFill: boolean; pictureSide: StageSide; portrait: boolean; stepButtons: boolean; scrubber: boolean; userStops: boolean };
+export type Display = Scheme & { follow: Follow | null; quotes: QuoteShape; hideHeader: boolean; foldComposer: boolean; enterSends: boolean; hidePictures: boolean; pictureWidest: number; wideFill: boolean; pictureSide: StageSide; inlineIllustrations: boolean; portrait: boolean; stepButtons: boolean; scrubber: boolean; userStops: boolean };
 
 export type Follow = Record<Theme, string> & { applied: Theme };
 
 const PLAIN = { bg: 'base', ink: 'base', accent: 'base', dialogue: 'base' } as const;
 
-export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, follow: null, quotes: 'color', hideHeader: false, foldComposer: true, enterSends: true, hidePictures: false, pictureWidest: 100, wideFill: true, pictureSide: 'right', portrait: false, stepButtons: false, scrubber: true, userStops: false };
+export const DISPLAY_DEFAULT: Display = { theme: 'dark', ...PLAIN, follow: null, quotes: 'color', hideHeader: false, foldComposer: true, enterSends: true, hidePictures: false, pictureWidest: 100, wideFill: true, pictureSide: 'right', inlineIllustrations: false, portrait: false, stepButtons: false, scrubber: true, userStops: false };
 
 export function parseDisplay(stored: string, fallback: Display): Display {
   const read = fields<keyof Display>(stored);
@@ -72,6 +72,7 @@ export function parseDisplay(stored: string, fallback: Display): Display {
     pictureWidest: percent(read.pictureWidest) ?? fallback.pictureWidest,
     wideFill: flag(read.wideFill, fallback.wideFill),
     pictureSide: known(SIDE, read.pictureSide, fallback.pictureSide),
+    inlineIllustrations: flag(read.inlineIllustrations, fallback.inlineIllustrations),
     portrait: flag(read.portrait, fallback.portrait),
     stepButtons: flag(read.stepButtons, fallback.stepButtons),
     scrubber: flag(read.scrubber, fallback.scrubber),

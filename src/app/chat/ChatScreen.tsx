@@ -135,7 +135,7 @@ export function ChatScreen({ id: chatId, item, shelf, back, side, onPaired }: Pr
         }
         reading={reading}
         hideHeader={display.hideHeader}
-        stage={chat.stage}
+        stage={chat.stage && !display.inlineIllustrations}
         side={display.pictureSide}
         portrait={portrait}
         pictures={{ ...shelf?.character.pictures, widest: shelf?.character.pictures?.widest ?? display.pictureWidest, wideFill: display.wideFill }}
