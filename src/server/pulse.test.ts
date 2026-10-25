@@ -134,6 +134,15 @@ it('merges one model across lists by its name and ranks 대화 by the last 24 ho
   });
 });
 
+it('names no 대화 row below the floor while a view holds only one, whose count the pool would be', async () => {
+  await t.env.db.prepare("INSERT INTO models_dev (list, model, name) VALUES ('openrouter', 'r', 'R')").run();
+  const cookies = await people(10);
+  await seen(cookies);
+  await call(cookies[0]!, 'chat', 'openrouter', 'r');
+  at(NOON + HOUR);
+  expect((await board())!.ranking.chat).toEqual({ merged: [], split: [], rest: { merged: { share: 1, replies: 0 }, split: { share: 1, replies: 0 } } });
+});
+
 it('counts a call once its provider answered 2xx, once after a stream retried', async () => {
   const [cookie] = await people(1);
   answers = [500];
