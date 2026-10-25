@@ -128,6 +128,11 @@ export type Avatar = { type: string; size: number; thumb: string; file: FileRef 
 // Kind `asset`, whose parent is the character or module (design §6.4). type is what the bytes are, read from them.
 export type Asset = { name: string; type: string; size: number; file: FileRef };
 
+// Kind `inlay`, a chat's own picture, which its messages name by name ({{inlay::name}}). attached: the user put it in
+// the composer, so it goes to a model that sees pictures; absent, it came with a chat brought from Risu and goes only
+// where the chat's movedPictures is on.
+export type Inlay = Asset & { attached?: true };
+
 // A character with its chats, or (id null) the chats that have no character: 캐릭터 없이. face: the avatar's thumbnail;
 // avatar: its id, whose file is the picture at full size.
 export type Shelf<C> = { id: string | null; character: Character | null; face: string | null; avatar: string | null; chats: C[] };

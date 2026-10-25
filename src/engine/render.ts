@@ -41,8 +41,8 @@ export type ChatScope = {
   axModel: CbsContext['axModel'];
   clock: CbsContext['clock'];
   assets: CbsContext['assets'];
-  // The chat's own pictures, brought from Risu's inlay store, each named by its tag's id exactly; never one of assets.
-  inlays: readonly { id: string; name: string; type: string }[];
+  // The chat's own pictures (model/library Inlay), each named by its tag's id exactly; never one of assets.
+  inlays: readonly { id: string; name: string; type: string; attached?: true }[];
   modules: CbsContext['modules'];
   faces: CbsContext['faces'];
   // The window the chat is shown in, which only the display reads; null in a turn and in a chat's preview.

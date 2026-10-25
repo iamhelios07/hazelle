@@ -8,6 +8,7 @@ import { retrievalOf } from './retrieval';
 import { triggersOf } from './script-selection';
 import { toolsOf } from './tools/store';
 import { prepareChat } from '../connectors/preparation';
+import { seesPictures } from '../connectors/types';
 import { batchLane, resolveConnection, resolveModel } from '../connectors/registry';
 import { providerFit, type TokenSnapshot } from './token-calibration';
 import type { Assembled, PromptInput } from '../engine/pipeline';
@@ -44,7 +45,7 @@ const BLOCKED = { 'no-model': true, 'model-gone': true, 'image-only': true, 'pro
 export const isBlocked = (failure: { kind: string }): failure is Blocked => Object.hasOwn(BLOCKED, failure.kind);
 
 // Read once when it is asked for, the user's new message last in its messages.
-export type TurnContext = Pick<Ask, 'route' | 'settings' | 'said'> & Pick<Turn, 'reply'> & Pick<PromptInput, 'scope' | 'budget' | 'memory'> & { chat: Chat };
+export type TurnContext = Pick<Ask, 'route' | 'settings' | 'said'> & Pick<Turn, 'reply'> & Pick<PromptInput, 'scope' | 'budget' | 'memory' | 'pictures'> & { chat: Chat };
 
 function sendable({ store }: Reader, scope: ChatScope, chat: Chat): PromptInput['scope'] | Blocked {
   const { prompt, persona } = scope;
@@ -105,6 +106,7 @@ export function gatherTurn(session: Pick<Session, 'store' | 'read'>, chat: strin
     scope,
     budget: budgetOf(route.model, sentSettings(session.store, route)),
     memory: memoryFill(session.store, unsaved ? null : chat, value, scope.messages),
+    pictures: { seen: seesPictures(route.model), moved: value.movedPictures === true },
     said,
     reply: { id: ids.reply, message, replaces: 'version' in target ? target.version : null, ...(message === null && { follows: said ? said.id : follows }), continues },
   };
@@ -139,7 +141,7 @@ export async function forecastSend(session: Forecaster, chat: string, target: Ta
     const snapshot = await session.tokens.snapshot(turn.route, turn.settings, tokenLimits(turn.route.model, sentSettings(session.store, turn.route)), 'conversation', chat, signal ?? new AbortController().signal);
     if (!snapshot.ok) return null;
     const fit = providerFit(turn.route, turn.settings, snapshot.data.fit.allowance);
-    const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, fit, ...session.scriptTurns.cachedPrompt(chat, turn), continuing: false, answerInstruction: answerInstructionOf(session.store) }, signal);
+    const prompt = await session.store.evaluation.prompt({ asker, chat }, { scope: turn.scope, seed: turn.reply.id, budget: turn.budget, fit, ...session.scriptTurns.cachedPrompt(chat, turn), continuing: false, answerInstruction: answerInstructionOf(session.store), pictures: turn.pictures }, signal);
     if (signal?.aborted) return null;
     if ((!projection || session.store.loadedHead(chat) === projection.summary.head) && reads.every((read, at) => session.store.revision(read) === revisions[at])) return 'kind' in prompt ? prompt : { turn, prompt, calibration: snapshot.data };
   }

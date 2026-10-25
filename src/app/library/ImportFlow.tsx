@@ -310,7 +310,8 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     asked(() => pickFiles(accept, true, (picked) => void take(picked, to)));
   }
 
-  const dragging = useFileDrop((dropped) => asked(() => void take(dropped, undefined)));
+  const drop = (dropped: File[]) => asked(() => void take(dropped, undefined));
+  const dragging = useFileDrop(drop);
 
   const idsOf = (kind: ImportOutcome['kind']) => state?.results.flatMap((result) => (result.kind === kind ? [result.id] : [])) ?? [];
   const done = idsOf('character');
@@ -362,6 +363,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
         pickPersonas: () => open(undefined, '.png'),
         move: () => asked(() => setAsking(true)),
         bring: (file) => new Promise((done) => asked(() => void take([file], undefined).then((results) => done(results.some((result) => result.kind === 'character'))))),
+        drop,
       }}
     >
       {children}

@@ -35,7 +35,7 @@ const media = ({ type, data }: InputPicture): Part => ({ inlineData: { mimeType:
 // the pictures beside it keep theirs.
 const pdfPart = (transcript: string): Part => ({ inlineData: { mimeType: 'application/pdf', data: pdfData(transcript) }, mediaResolution: { level: 'MEDIA_RESOLUTION_LOW' } });
 
-const parts = ({ content, document: packed, pictures = [] }: ChatMessage): Part[] => [...(packed === undefined ? [] : [pdfPart(packed)]), ...pictures.map(media), { text: content }];
+const parts = ({ content, document: packed, pictures = [] }: ChatMessage): Part[] => [...(packed === undefined ? [] : [pdfPart(packed)]), ...pictures.map(media), ...(content === '' && pictures.length ? [] : [{ text: content }])];
 
 function contents(messages: ChatMessage[]) {
   const turns: { role: 'user' | 'model'; parts: Part[] }[] = [];

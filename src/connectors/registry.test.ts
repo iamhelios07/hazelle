@@ -409,6 +409,12 @@ describe('chat requests', () => {
     ]);
   });
 
+  it('sends Anthropic a message of pictures alone with no empty text block, the cache mark on its last picture', () => {
+    const alone = [{ role: 'user' as const, content: '', cache: true as const, pictures: [{ type: 'image/png', data: 'AAAA' }] }];
+    const block = { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } };
+    expect(JSON.parse(chatRequest(connection('anthropic'), { model: seeing, messages: alone, settings: { cache: '5m' } }).body!).messages).toEqual([{ role: 'user', content: [{ ...block, cache_control: { type: 'ephemeral' } }] }]);
+  });
+
   it('refuses pictures before sending to a model not known to see them, and still forecasts the cache', () => {
     const anthropic = connection('anthropic');
     for (const input of [null, ['text' as const]]) {

@@ -1,0 +1,64 @@
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  padding: 0 0 var(--space-8);
+  margin: 0;
+  list-style: none;
+}
+
+.item {
+  position: relative;
+  width: var(--attachment-size);
+  height: var(--attachment-size);
+  border: var(--border-thin) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--color-surface-raised);
+}
+
+.failed {
+  border-color: var(--color-warn-border);
+}
+
+.picture {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cover {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-glass);
+}
+
+.mark {
+  color: var(--color-warn);
+}
+
+.spinner {
+  composes: spin from '../foundation/motion.module.css';
+  width: var(--control-mark);
+  height: var(--control-mark);
+  border: var(--border-thick) solid var(--color-text);
+  border-right-color: transparent;
+  border-radius: var(--radius-full);
+}
+
+.remove {
+  position: absolute;
+  top: var(--space-4);
+  right: var(--space-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--control-mark);
+  height: var(--control-mark);
+  border-radius: var(--radius-full);
+  background: var(--color-glass);
+  color: var(--color-text);
+}

@@ -13,7 +13,8 @@ import { useSession } from '../session';
 
 const SETTLE_MS = 400;
 
-export type SendNotes = { cache: CacheNotes; leaving: number | null; sending: Sending | Unsendable | null | undefined; request: () => SentRequest | null };
+// unseen: the pictures the chat's messages hold that the model, seeing none, is not sent (engine/pipeline Assembled).
+export type SendNotes = { cache: CacheNotes; leaving: number | null; unseen: number; sending: Sending | Unsendable | null | undefined; request: () => SentRequest | null };
 
 // until: when the last call's cache runs out, null when it cached nothing. next: the draft's forecast against the
 // chat's stored last call (runtime/cache), with what a break costs where the model is priced and the model it was worked
@@ -83,5 +84,5 @@ export function useSendNotes(id: string, unsaved: Unsaved | null, chat: Chat, me
       return wire;
     };
   }, [sending]);
-  return { cache, leaving: left, sending, request };
+  return { cache, leaving: left, unseen: sending && 'turn' in sending ? sending.prompt.unseen : 0, sending, request };
 }

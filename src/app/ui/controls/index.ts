@@ -1,3 +1,4 @@
+export { Attachments, type Attached } from './Attachments';
 export { Button } from './Button';
 export { Checkbox } from './Checkbox';
 export { ChipButton } from './ChipButton';

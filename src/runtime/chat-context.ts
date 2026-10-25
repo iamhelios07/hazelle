@@ -138,7 +138,7 @@ export function scopeOf({ store }: Reader, id: string | null, chat: Chat, messag
     clock: { now: Date.now(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
     assets: owners.flatMap(({ id: owner, module }) => store.children('asset', owner).map(({ id, value }) => ({ id, name: value.name, type: value.type, ...(module && { module: module.namespace }) }))),
     // Held only while the chat is loaded; a chat not saved yet has none.
-    inlays: id !== null && store.scopeState(id) === 'loaded' ? store.children('inlay', id).map(({ id, value }) => ({ id, name: value.name, type: value.type })) : [],
+    inlays: id !== null && store.scopeState(id) === 'loaded' ? store.children('inlay', id).map(({ id, value }) => ({ id, name: value.name, type: value.type, ...(value.attached && { attached: true as const }) })) : [],
     modules: packs.flatMap(({ module }) => module?.namespace ?? []),
     faces: {
       char: chat.character === null ? null : (store.children('avatar', chat.character)[0]?.value.thumb ?? null),

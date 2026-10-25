@@ -1,4 +1,4 @@
-import type { ChatMessage, InputPicture } from '../connectors/types';
+import type { ChatMessage } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Assembled } from '../engine/pipeline';
 import type { Event, Outcome } from '../engine/script-api';
@@ -16,12 +16,12 @@ export const requestEvent = (sent: Sent[]): Event => ({ kind: 'edit', stage: 'ed
 // An answered message names its origin under key (the Lua's memo, a tool's message); keeping one it was given keeps
 // that message's pictures, which neither reads as text. One that is no message is left out.
 export function sentBack(sent: Sent[], answered: unknown[], key: 'memo' | 'message'): Sent[] {
-  const origins = new Map<string, InputPicture[] | undefined>(sent.flatMap(({ message, origin }) => origin === undefined ? [] : [[origin, message.pictures]]));
+  const origins = new Map<string, string[] | undefined>(sent.flatMap(({ message, origin }) => origin === undefined ? [] : [[origin, message.inlays]]));
   return answered.flatMap((message): Sent[] => {
     if (!isRecord(message) || typeof message.content !== 'string' || (message.role !== 'system' && message.role !== 'user' && message.role !== 'assistant')) return [];
     const origin = typeof message[key] === 'string' && origins.has(message[key]) ? message[key] : undefined;
     const kept = origin === undefined ? undefined : origins.get(origin);
-    return [{ message: { role: message.role, content: message.content, ...(message.cache === true && { cache: true }), ...(kept && { pictures: kept }) }, ...(origin !== undefined && { origin }) }];
+    return [{ message: { role: message.role, content: message.content, ...(message.cache === true && { cache: true }), ...(kept && { inlays: kept }) }, ...(origin !== undefined && { origin }) }];
   });
 }
 

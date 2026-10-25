@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { entryName } from '../../connectors/types';
-import { resolveAssets } from '../../engine/assets';
+import { pictured, resolveAssets } from '../../engine/assets';
 import { holdsPersona, unused } from '../../engine/pipeline';
 import type { Card } from '../../engine/import/types';
 import { shown, type ChatItem, type ChatSummary } from '../../model/chat';
@@ -8,6 +8,7 @@ import type { CharacterShelf } from '../../model/library';
 import { resetToggles, setToggle } from '../../runtime/characters';
 import { chatTranslate, featuresOf } from '../../runtime/features';
 import { removeChat, renameChat, restoreChat, restoreRaw } from '../../runtime/chat-log';
+import { keepPictures } from '../../runtime/inlays';
 import { branchFrom, pickVersion } from '../../runtime/message-acts';
 import { badgesByVersion, toolActions, toolComposer } from './toolMenu';
 import type { ScreenAt } from '../../runtime/script-pages';
@@ -47,6 +48,7 @@ import { useChatIllustrations } from './useChatIllustrations';
 import { useChatRemarks } from './useChatRemarks';
 import { useChatPolishing } from './useChatPolishing';
 import { useChatTranslation } from './useChatTranslation';
+import { useChatPictures } from './useChatPictures';
 import { useChatSettings } from './useChatSettings';
 import { joinParts } from './joinParts';
 
@@ -125,6 +127,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const anchor = busy && !turn.reply.continues ? anchorOf(messages, turn.reply.message ?? turn.reply.id) : null;
 
   const draft = useDraft(id, chat.character);
+  const { actions: pictureActions, ...attaching } = useChatPictures(id, draft.key, chat, route);
   const { follow: toBottom, beforeTurn, seekTo, ...scroll } = useFollow(messages.length, busy, anchor, reply === 'stay');
   const story = useStorySteps(messages, scroll.scrollRef, seekTo, follow);
   const memory = useChatMemory(id);
@@ -152,6 +155,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
   const { bookmarked, actions: bookmarkActions } = useChatBookmarks(id, chat.bookmarks, messages, busy, searchActions.find);
   const { actions: statusActions, ...status } = useChatStatus(chat, shelf?.character ?? null, view, messages);
   const { editing, actions: editActions } = useMessageEdit(id, messages, (message) => ask({ kind: 'regenerate', message: message.id }), translationActions.carryFlip);
+  const sending = useRef(false);
   // Set when a send or a reply was stopped before the network; the composer then shows what stops the chat now,
   // so a fix made anywhere clears it.
   const [stopped, setStopped] = useState(false);
@@ -215,21 +219,44 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     return failure;
   }
 
-  // Nothing typed asks for a reply after the last message (응답 받기), as RisuAI's empty send does.
+  // Nothing typed and no picture asks for a reply after the last message (응답 받기), as RisuAI's empty send does.
+  // Pictures still saving are waited for in the composer, and their rows are written before the turn reads the chat.
   async function send(skip: Skip = {}) {
-    if (busy) return;
-    if (!draft.text.trim()) {
+    if (busy || sending.current) return;
+    if (!draft.text.trim() && !attaching.attachments.draft.length) {
       if (answerable) ask({ kind: 'answer' }, skip);
       return;
     }
     if (blocked(session, chat)) return setStopped(true);
-    const text = drafts.text(draft.key).trim();
-    if (!text || talk.snapshot(chatId)) return;
-    drafts.set(draft.key, '');
-    const failure = await say(text, skip);
-    // An unsaved reply or a kept failure means the user's message was saved. Any other failure's text goes back to the
-    // chat's draft, wherever that is by now: a new chat may have been saved before the failure, or not at all.
-    if (failure && failure.kind !== 'unsaved' && !failure.kept) drafts.putBack(store.get('chat', chatId) ? chatId : draft.key, text);
+    sending.current = true;
+    try {
+      const settled = await Promise.all(drafts.pictures(draft.key).map(({ saved }) => saved));
+      if (settled.some(({ kind }) => kind === 'failed')) {
+        toast.show('올리지 못한 이미지가 있어요. 빼고 다시 보내 주세요.');
+        return;
+      }
+      if (talk.snapshot(chatId)) return;
+      const taken = drafts.take(draft.key);
+      const text = taken.text.trim();
+      // Wherever the chat's draft is by now: a new chat may have been saved meanwhile, or not at all.
+      const putBack = () => drafts.putBack(store.get('chat', chatId) ? chatId : draft.key, text, taken.pictures);
+      const values = settled.flatMap((state) => (state.kind === 'saved' ? [state.value] : []));
+      if (values.length) {
+        const unstarted = id === null && (await starting().saved);
+        const kept = unstarted || (await keepPictures(store, chatId, values));
+        if (!kept.ok) {
+          putBack();
+          toast.failed(kept);
+          return;
+        }
+      }
+      const failure = await say(pictured(values.map(({ name }) => name), text), skip);
+      // An unsaved reply or a kept failure means the user's message was saved.
+      if (failure && failure.kind !== 'unsaved' && !failure.kept) putBack();
+      else drafts.release(taken.pictures);
+    } finally {
+      sending.current = false;
+    }
   }
 
   async function press(button: BotButton | null) {
@@ -350,7 +377,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     setDialog(null);
   }
 
-  return joinParts(status, translation, illustration, remark, {
+  return joinParts(status, translation, illustration, remark, attaching, {
     displayPending, displayError, retryDisplay, stuck,
     id,
     item,
@@ -404,7 +431,7 @@ export function useChat(chatId: string, item: ChatItem | null, shelf: CharacterS
     scroll,
     keys: story.keys,
     stops: story.stops,
-    actions: joinParts(story.actions, searchActions, statusActions, editActions, translationActions, illustrationActions, remarkActions, bookmarkActions, settingActions, {
+    actions: joinParts(story.actions, searchActions, statusActions, editActions, translationActions, illustrationActions, remarkActions, bookmarkActions, settingActions, pictureActions, {
       send: () => void send(),
       sendSkipping: () => skippable && sendSkipping(skippable),
       say,

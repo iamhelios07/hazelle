@@ -1,4 +1,4 @@
-import { rewritten, type ProviderFit } from './prompt-budget';
+import { PICTURE_TOKENS, rewritten, type ProviderFit } from './prompt-budget';
 import { countTokens } from 'gpt-tokenizer/encoding/o200k_base';
 import { describe, expect, it } from 'vitest';
 import { bareModel } from '../connectors/chat-completions';
@@ -106,7 +106,8 @@ const assembledOf = (result: ReturnType<typeof assemble>) => {
 const sentOf = (result: ReturnType<typeof assemble>) => assembledOf(result).messages;
 const providerFit = (allowance: number | null): ProviderFit => ({ allowance, route: { provider: null, endpoint: { baseUrl: 'https://example.test', protocol: 'chat-completions' } }, model: bareModel('m'), settings: {} });
 
-const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, answerInstruction: 'Go on.', memory: null });
+const NO_PICTURES: PromptInput['pictures'] = { seen: false, moved: false };
+const input = (over: Partial<PromptInput['scope']> = {}): PromptInput => ({ scope: scope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, answerInstruction: 'Go on.', memory: null, pictures: NO_PICTURES });
 const build = (over: Partial<PromptInput['scope']> = {}) => sentOf(assemble(input(over)));
 
 describe('assemble', () => {
@@ -243,6 +244,18 @@ describe('assemble', () => {
     expect(after.messages.at(-1)).toEqual({ role: 'user', content: 'Go on.' });
     expect(after.parts.at(-1)!.from).toEqual({ kind: 'answer' });
     expect(assembledOf(assemble(input())).parts.some(({ from }) => from.kind === 'answer')).toBe(false);
+  });
+
+  it("shows the model the user's attached pictures, the ones brought from Risu only when the chat lets them, and counts them where it sees none", () => {
+    const messages = [message('u1', 'user', '{{inlay::old}}Look.'), message('a1', 'assistant', '{{inlay::drawn}}Here.'), message('u2', 'user', '{{inlay::mine}}')];
+    const inlays = [{ id: 'row-old', name: 'old', type: 'image/png' }, { id: 'row-drawn', name: 'drawn', type: 'image/png', attached: true as const }, { id: 'row-mine', name: 'mine', type: 'image/webp', attached: true as const }];
+    const sent = (pictures: PromptInput['pictures']) => assembledOf(assemble({ ...input({ messages, greeting: null, inlays }), pictures }));
+    const shown = sent({ seen: true, moved: false });
+    expect(shown.messages.slice(-3)).toEqual([{ role: 'user', content: 'Look.' }, { role: 'assistant', content: 'Here.' }, { role: 'user', content: '', inlays: ['row-mine'], cache: true }]);
+    expect(shown.parts.at(-1)!.tokens).toBe(PICTURE_TOKENS);
+    expect(sent({ seen: true, moved: true }).messages.find(({ content }) => content === 'Look.')).toEqual({ role: 'user', content: 'Look.', inlays: ['row-old'] });
+    const unseen = sent({ seen: false, moved: true });
+    expect([unseen.messages.some(({ inlays }) => inlays), unseen.messages.some(({ content }) => content === ''), unseen.unseen]).toEqual([false, false, 2]);
   });
 
   it('never scans the greeting for keys, and still places @@depth entries counting from the chat’s end', () => {
@@ -397,7 +410,7 @@ describe('assemble', () => {
   it('drops the oldest chat messages until the prompt fits its budget, keeps the last one and the rest of the prompt, and refuses what still does not fit', () => {
     const tokens = (text: string) => countTokens(text, { disallowedSpecial: new Set() });
     const messages = Array.from({ length: 40 }, (_, i) => message(`m${i}`, i % 2 ? 'assistant' : 'user', `Message ${i}: ${'The lighthouse keeps its light. '.repeat(20)}`));
-    const input = { scope: scope({ messages, greeting: null }), seed: 'reply-1', countTokens: tokens, tools: [], continuing: false, answerInstruction: 'Go on.', memory: null };
+    const input = { scope: scope({ messages, greeting: null }), seed: 'reply-1', countTokens: tokens, tools: [], continuing: false, answerInstruction: 'Go on.', memory: null, pictures: NO_PICTURES };
     const size = (sent: ChatMessage[]) => sent.reduce((sum, { content }) => sum + tokens(content), 0);
     const inChat = ({ content }: ChatMessage) => content.startsWith('Message ');
     const whole = sentOf(assemble({ ...input, budget: null, fit: providerFit(null) }));
@@ -467,7 +480,7 @@ describe('assemble with memory', () => {
   });
   const memoryOf = (records: MemoryRecord[]): Memory => ({ records, chapters: [], state: [{ about: 'Luna', field: 'mood', value: 'wary', record: null }], threads: [{ id: 't1', text: 'jin will come back.', opened: null }] });
   const withMemory = (memory: Memory, budget = 25_000, over: Partial<PromptInput['scope']> = {}, found: string[] = []): Assembled =>
-    assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, answerInstruction: 'Go on.', memory: { kind: 'built-in', memory, budget, shown, found } }));
+    assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (text) => text.length, budget: null, tools: [], continuing: false, answerInstruction: 'Go on.', memory: { kind: 'built-in', memory, budget, shown, found }, pictures: NO_PICTURES }));
   const chatOf = (result: Assembled) => result.messages.filter((_, index) => result.parts[index]!.from.kind === 'block' && (result.parts[index]!.from as { slot: string }).slot === 'chat').map(({ content }) => content);
   const memoryOfSent = (result: Assembled) => result.messages.find((_, index) => (result.parts[index]!.from as { slot?: string }).slot === 'memory');
 
@@ -540,7 +553,7 @@ describe('assemble with memory', () => {
 
   it("sends a tool's memory in the slot's own place, leaves out the messages through the one it names, and cuts nothing where the slot does not reach", () => {
     const told = (text: string, through: number, over: Partial<PromptInput['scope']> = {}) =>
-      assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (each) => each.length, budget: null, tools: [], continuing: false, answerInstruction: 'Go on.', memory: { kind: 'tool', name: '기억', text, through } }));
+      assembledOf(assemble({ scope: chatScope(over), seed: 'reply-1', countTokens: (each) => each.length, budget: null, tools: [], continuing: false, answerInstruction: 'Go on.', memory: { kind: 'tool', name: '기억', text, through }, pictures: NO_PICTURES }));
     const result = told('Luna waits at the lighthouse.', 3);
     expect(result.memory).toEqual({ by: '기억', text: 'Luna waits at the lighthouse.', covered: 4, missing: 0, slot: true });
     expect(chatOf(result)).toEqual(['Morning comes.', 'Luna is calm.']);
@@ -662,7 +675,7 @@ describe('a request a script rewrote', () => {
     { role: 'assistant', content: 'first reply' },
     { role: 'user', content: 'second hello' },
   ];
-  const prompt: Assembled = { messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, silent: null, invalidKeys: [], loreBudget: 0, memory: null, dropped: 2, problems: { found: [], omitted: 0 } };
+  const prompt: Assembled = { messages: built, parts: [main, chat, chat, chat].map((from, at) => ({ from, tokens: built[at]!.content.length })), lore: null, silent: null, invalidKeys: [], loreBudget: 0, memory: null, dropped: 2, problems: { found: [], omitted: 0 }, unseen: 0 };
   const note: ChatMessage = { role: 'system', content: 'from the script' };
   const count = (text: string) => text.length;
 

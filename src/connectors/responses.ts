@@ -22,7 +22,7 @@ function ended(response: Record<string, unknown>, facts: StreamFacts) {
 const inputItem = (message: ChatMessage) => {
   const { role, content, pictures = [] } = message;
   if (!carriesPictures(message)) return { role, content };
-  return { role, content: [...pictures.map((picture) => ({ type: 'input_image', image_url: dataUrl(picture) })), { type: 'input_text', text: content }] };
+  return { role, content: [...pictures.map((picture) => ({ type: 'input_image', image_url: dataUrl(picture) })), ...(content === '' ? [] : [{ type: 'input_text', text: content }])] };
 };
 
 function texts(parts: unknown, type: string): string[] {

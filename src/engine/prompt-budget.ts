@@ -14,9 +14,15 @@ export type Part = Sent | ChatPart | CachePart;
 
 export type ProviderFit = { allowance: number | null; route: WireRoute; model: Model; settings: ModelSettings };
 
+// What a picture is budgeted at, whatever its size: Anthropic's ~1.15 megapixels over 750, the dearest of the codecs, which
+// runtime/picture never sends past.
+export const PICTURE_TOKENS = 1600;
+const pictureTokens = (message: ChatMessage) => (message.inlays?.length ?? 0) * PICTURE_TOKENS;
+export const messageTokens = (countTokens: (text: string) => number, message: ChatMessage) => countTokens(message.content) + pictureTokens(message);
+
 export function wireTokens(fit: ProviderFit, messages: ChatMessage[], countTokens: (text: string) => number): number {
   const prepared = prepareChat(requestRoute(fit.route), { model: fit.model, settings: fit.settings, messages });
-  return prepared.wire.segments.reduce((total, { text }) => total + countTokens(text), 0);
+  return prepared.wire.segments.reduce((total, { text }) => total + countTokens(text), 0) + messages.reduce((total, message) => total + pictureTokens(message), 0);
 }
 
 export type ChatSent = Omit<Sent, 'from'>;
@@ -74,7 +80,7 @@ export function rewritten(prompt: Assembled, messages: ChatMessage[], countToken
   const sent = messages.map((message) => {
     let at = next;
     while (at < prompt.messages.length && (prompt.messages[at]!.role !== message.role || prompt.messages[at]!.content !== message.content)) at++;
-    if (at === prompt.messages.length) return { message, from: { kind: 'script' } satisfies From, tokens: tokens(message.content) };
+    if (at === prompt.messages.length) return { message, from: { kind: 'script' } satisfies From, tokens: messageTokens(tokens, message) };
     next = at + 1;
     return { message, ...prompt.parts[at]! };
   });
@@ -140,8 +146,8 @@ function budgetSize(template: Part[], messages: ChatSent[], depths: { depth: num
       // dropOldest advances cuts in order: both absolute bounds only advance. Each text enters/leaves a slot
       // at most once; nothing outside the tried ranges is tokenized, including when no trimming is needed.
       // Costs themselves need not be monotone: overlapping signed ranges can gain messages as cuts advance.
-      for (let at = held.start; at < Math.min(absoluteStart, held.end); at++) held.tokens -= tokens(messages[at]!.message.content);
-      for (let at = Math.max(held.end, absoluteStart); at < absoluteEnd; at++) held.tokens += tokens(messages[at]!.message.content);
+      for (let at = held.start; at < Math.min(absoluteStart, held.end); at++) held.tokens -= messageTokens(tokens, messages[at]!.message);
+      for (let at = Math.max(held.end, absoluteStart); at < absoluteEnd; at++) held.tokens += messageTokens(tokens, messages[at]!.message);
       held.start = absoluteStart;
       held.end = absoluteEnd;
       if (end <= start) continue;

@@ -1,7 +1,7 @@
 import { fitsRole } from '../connectors/assignment';
 import { RETRIES } from '../connectors/registry';
 import type { ModelSettings } from '../connectors/settings';
-import { entriesOf, entryKey, ownOf, snapshotOf, type Account, type Connection, type ConnectionType, type Model, type Starred, type Turns } from '../connectors/types';
+import { entriesOf, entryKey, ownOf, seesPictures, snapshotOf, type Account, type Connection, type ConnectionType, type Model, type Starred, type Turns } from '../connectors/types';
 import { isRecord } from '../connectors/values';
 import type { Stored } from '../model/kinds';
 import { without } from '../model/fields';
@@ -156,6 +156,16 @@ export async function refreshStarred(store: ObjectStore, id: string, models: Mod
   };
   if (store.get('connection', id)?.value.starred.every((model) => sameValue(fresh(model), model)) !== false) return;
   await store.update('connection', id, (current) => ({ ...current, starred: current.starred.map(fresh) }));
+}
+
+// A model starred before its catalog's inputs were filled from models.dev keeps an unknown input in its starred copy,
+// which only opening its model list refreshes; asked here, so pictures are not given or held back blind for that.
+export async function seesPicturesNow({ store, catalogs }: Pick<Session, 'store' | 'catalogs'>, { connection, model }: { connection: Stored<'connection'>; model: Model }): Promise<boolean> {
+  if (model.input !== null) return seesPictures(model);
+  const listed = await catalogs.load(connection.value);
+  if (!listed.ok) return false;
+  await refreshStarred(store, connection.id, listed.models);
+  return seesPictures(listed.models.find(({ id }) => id === model.id) ?? model);
 }
 
 // Most specific first: the model's 설정 묶음, then its connection, then the account's shared count.

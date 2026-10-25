@@ -4,14 +4,16 @@ import type { Blocked } from '../../runtime/turn-context';
 import { describeTurnFailure } from '../common/failure';
 import { withParticle } from '../common/particles';
 import { ACTS } from '../common/acts';
-import { ANSWER } from '../common/words';
+import { ANSWER, NO_PICTURES } from '../common/words';
 import type { PromptDoor } from '../common/TaskPrompt';
 import { navigate } from '../shell/router';
 import { keysOf, SHORTCUTS, titled, typing, useShortcut } from '../shortcuts';
 import { useDisplay } from '../display';
 import { useRemembering } from '../session';
-import { Callout, Composer, Hint, pressed, pressedKey, SendButton, SendNote, useMenuOpener } from '../ui';
+import { useImport } from '../common/importing';
+import { Attachments, Callout, Composer, DropOverlay, Hint, pressed, pressedKey, SendButton, SendNote, useFileDrop, useMenuOpener } from '../ui';
 import { ChatAsk } from './ChatAsk';
+import { ChatAttach } from './ChatAttach';
 import { ChatCache } from './ChatCache';
 import { ChatComposerTools } from './ChatComposerTools';
 import { ChatIllustrate } from './ChatIllustrate';
@@ -23,6 +25,7 @@ import { promptEditor } from './panels';
 import type { OpenChat } from './useChat';
 
 const LEAVING = '가장 오래된 메시지가 요청에서 빠지는데, 장기 기억에도 없어서 모델이 그 내용을 알 수 없어요.';
+const UNSEEN = `${NO_PICTURES} 이미지는 빼고 글만 보내고, 이미지만 있는 메시지는 보내지 않아요.`;
 
 type Chip = 'model' | 'prompt' | 'persona' | 'profile';
 const FIX = {
@@ -36,7 +39,7 @@ const FIX = {
 
 // folded: ChatScreen's, which the frame's footer measures by, so the two never disagree.
 export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean }) {
-  const { draft, messages, last, answerable, busy, problem, skippable, stuck, translate, sendLanguage, modelMenu, shelf, route, actions } = chat;
+  const { draft, attachments, messages, last, answerable, busy, problem, skippable, stuck, translate, sendLanguage, modelMenu, shelf, route, actions } = chat;
   // A model whose own 모델 설정 is gone picks another on its page; a missing default is set in 설정 › 모델.
   const profilePage = problem?.kind === 'profile-missing' && problem.own && !('kind' in route) ? { kind: 'model' as const, ...refOf(route.connection.id, route.model) } : { kind: 'models' as const };
   const chips: Record<Chip, { onClick: () => void }> = {
@@ -49,7 +52,15 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
   const remembering = useRemembering();
   const indexing = chat.features.memory && chat.id !== null ? remembering.indexing.get(chat.id) : undefined;
   const sendKeys = keysOf('send', useDisplay().display.enterSends);
-  const typed = draft.text.trim() !== '';
+  const typed = draft.text.trim() !== '' || attachments.draft.length > 0;
+  const unseen = chat.sendNotes.unseen + (attachments.sees === false ? attachments.draft.length : 0);
+  const { drop } = useImport();
+  // A chat takes pictures dropped on it; any other file goes to the app's import, as it does on every other screen.
+  const dragging = useFileDrop((files) => {
+    const pictures = files.filter(({ type }) => type.startsWith('image/'));
+    if (pictures.length) actions.attachPictures(pictures);
+    if (pictures.length < files.length) drop(files.filter((file) => !pictures.includes(file)));
+  }, 'screen');
   // Moving through the story works where no text is typed: outside a text field, or in this one while it is empty.
   const free = (event?: globalThis.KeyboardEvent) => !typing(event) || (event!.target === input.current && draft.text === '');
   useShortcut('storyStep', (event) => {
@@ -113,8 +124,11 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
         onChange={draft.set}
         onKeyDown={onKey}
         placeholder={translate.input ? `${withParticle(sendLanguage, '으로/로')} 번역해서 보내요` : '메시지'}
+        attachments={<Attachments items={attachments.draft.map(({ name, url, state }) => ({ key: name, url, label: '이미지', state: state.kind }))} onRemove={actions.removePicture} />}
+        onFiles={actions.attachPictures}
         tools={
           <>
+            <ChatAttach sees={attachments.sees} moved={attachments.moved} onAttach={actions.attachPictures} onMoved={actions.sendMoved} />
             <ChatPersonaPicker persona={chat.persona} open={chat.dialog === 'persona'} onOpen={() => actions.openDialog('persona')} />
             <ChatNote id={chat.id} note={chat.note} prompt={chat.prompt} onSave={actions.setNote} />
             {chat.features.translate && <ChatTranslate
@@ -135,6 +149,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
         actions={
           <>
             {!busy && chat.sendNotes.leaving ? <SendNote label={`메시지 ${chat.sendNotes.leaving}개`} title="요청에서 빠질 메시지" warning={{ words: '기억에 없음', why: LEAVING }} /> : null}
+            {!busy && unseen > 0 && <SendNote label={`이미지 ${unseen}개`} title="모델에 가지 않는 이미지" warning={{ words: '보내지 않음', why: UNSEEN }} />}
             {indexing && <SendNote label={`기억 검색 준비 ${indexing.done}/${indexing.total}`} title="장기 기억 검색 준비" onClick={() => actions.memory(null)} />}
             {!busy && <ChatCache cache={chat.sendNotes.cache} onOpen={() => chat.actions.openInspect('request')} />}
             <SendButton
@@ -146,6 +161,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
           </>
         }
       />
+      {dragging && <DropOverlay>이미지는 메시지에 넣어요</DropOverlay>}
     </>
   );
 }

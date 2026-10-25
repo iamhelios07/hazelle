@@ -444,6 +444,8 @@
   /* The rail's faces, the only ones between a row's and a card's. */
   --avatar-rail: 40px;
   --avatar-lg: 72px;
+  /* A picture put in the composer, waiting to be sent (Attachments). */
+  --attachment-size: 64px;
   /* A post's 추천 column in a feed (VoteButton). */
   --vote-width: 52px;
   --vote-fill-opacity: 0.25;

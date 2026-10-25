@@ -192,7 +192,7 @@ export function useBin() {
   return useMemo(() => ({ modules: binned(modules), prompts: binned(prompts), personas: binned(personas), profiles: binned(profiles) }), [modules, prompts, personas, profiles]);
 }
 // parent null is a chat not saved yet, which has none.
-export function useChildren<K extends 'lore' | 'asset' | 'illustration' | 'remark' | 'toolchat'>(kind: K, parent: string | null): Stored<K>[] {
+export function useChildren<K extends 'lore' | 'asset' | 'illustration' | 'remark' | 'toolchat' | 'inlay'>(kind: K, parent: string | null): Stored<K>[] {
   const { read } = useSession();
   const model = parent === null ? null : read.children(kind, parent);
   return useSyncExternalStore(model?.subscribe ?? subscribeNothing, model?.snapshot ?? snapshotNone);

@@ -1,5 +1,5 @@
 import { ChangeSignal } from '../change-signal';
-import { seesPictures, type InputPicture, type Model } from '../connectors/types';
+import type { InputPicture } from '../connectors/types';
 import { artistTags, picturePrompt } from '../engine/import/picture-prompt';
 import { artistOf, importedPortraits, likenessRequest, parseLikeness, rebuiltPortraits, sample, SAMPLE_MOST, SHOWN_MOST, sourcesOf, type LikenessInvalid } from '../engine/likeness';
 import type { Chat, Receipt } from '../model/chat';
@@ -12,7 +12,7 @@ import type { RouteFailure } from './assignment';
 import { illustrateSwitches } from './characters';
 import { packsOf } from './chat-context';
 import { chatPersona } from './personas';
-import { refreshStarred } from './connections';
+import { seesPicturesNow } from './connections';
 import { PERMANENT } from './files';
 import { shownPicture } from './picture';
 import { taskWriter } from './profiles';
@@ -228,7 +228,7 @@ export class Likenesses {
     if (failed && !failed.ok) return failed.error === 'stopped' ? { kind: 'stopped' } : { kind: 'unread', failure: failed };
     const held: Held[] = [...material.held, ...read.flatMap(({ picture, read }) => (read.ok ? [{ ...picture, bytes: read.data }] : []))];
     const prompts = held.flatMap(({ bytes }) => picturePrompt(bytes) ?? []);
-    const shown = (await seesNow(this.deps, writer.route)) ? await shownPictures(held.slice(0, SHOWN_MOST)) : [];
+    const shown = (await seesPicturesNow(this.deps, writer.route)) ? await shownPictures(held.slice(0, SHOWN_MOST)) : [];
     const input = { name: material.name, user: material.user, texts, lore, prompts, pictures: shown.map(({ shown }) => shown), avatar: shown[0]?.avatar === true, most: PORTRAITS_MOST };
     const sources = sourcesOf(input);
     if (!sources.length) return save(empty);
@@ -239,16 +239,6 @@ export class Likenesses {
     const parsed = parseLikeness(answer.text, { sources, artist: artistOf(prompts.map(({ prompt }) => artistTags(prompt))), most: PORTRAITS_MOST });
     return parsed.ok ? save({ portraits: parsed.portraits, at: Date.now(), receipt }) : { kind: 'invalid', receipt, reason: parsed.reason };
   }
-}
-
-// A model starred before its catalog's inputs were filled from models.dev keeps an unknown input in its starred copy,
-// which only opening its model list refreshes; asked here, so a profile is not built blind for that.
-async function seesNow({ store, catalogs }: Deps, { connection, model }: { connection: Stored<'connection'>; model: Model }): Promise<boolean> {
-  if (model.input !== null) return seesPictures(model);
-  const listed = await catalogs.load(connection.value);
-  if (!listed.ok) return false;
-  await refreshStarred(store, connection.id, listed.models);
-  return seesPictures(listed.models.find(({ id }) => id === model.id) ?? model);
 }
 
 // A picture the browser cannot draw is left out.

@@ -1,7 +1,8 @@
 import type { CacheRender } from '../model/cache';
 import type { TokenEstimate, TokenFit } from '../model/token-calibration';
 import { cachePoints, type CachePart, type Sent } from './cache-points';
-import { fitChat, remembered, type ChatSent, type ProviderFit, type Part, type TooLong } from './prompt-budget';
+import { fitChat, messageTokens, remembered, type ChatSent, type ProviderFit, type Part, type TooLong } from './prompt-budget';
+import { inlayIds, SIGNATURE } from './assets';
 import type { ChatMessage } from '../connectors/types';
 import type { Memory, Written } from '../model/memory';
 import type { MascotId } from '../model/mascot';
@@ -39,7 +40,12 @@ export type PromptInput = {
   memory: MemoryFill | null;
   // The pre agents' notes for this reply (engine/agent agentNotes); absent or empty for none.
   notes?: string;
+  pictures: PictureSend;
 };
+
+// Which of the chat's inlays its user messages show the model (model/library Inlay): seen, whether the model sees
+// pictures at all; moved, the chat's movedPictures, which lets the ones brought from Risu go as well.
+export type PictureSend = { seen: boolean; moved: boolean };
 
 // What fills the memory slot: the built-in memory, or the text the tool holding the slot gave (design §6.10). through:
 // the place in scope.messages of the last message the text stands for, −1 for none.
@@ -88,7 +94,9 @@ export type From =
 // did not compile (design.md row 2: never match, listed). loreBudget: the 로어북 최대 분량 the activation was held to. memory: null while the
 // chat's memory is off. dropped: the chat's messages the budget left out, oldest first. problems: the first MOST_PROBLEMS
 // found, and how many more there were. source is the chat/memory text before rendering; cbs, the renders the part sends verbatim.
-export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string; source?: string; cbs?: CacheRender[] }[]; lore: (Fired & { name: string })[] | null; silent: (Silent & { name: string })[] | null; invalidKeys: { entry: string; name: string; key: string }[]; loreBudget: number; memory: MemorySent | null; dropped: number; problems: { found: Problem[]; omitted: number } };
+// unseen: the pictures in the user's messages memory does not cover, which the model, seeing none, is sent none of; a
+// message of pictures alone is not sent at all.
+export type Assembled = { messages: ChatMessage[]; parts: { from: From; tokens: number; origin?: string; source?: string; cbs?: CacheRender[] }[]; lore: (Fired & { name: string })[] | null; silent: (Silent & { name: string })[] | null; invalidKeys: { entry: string; name: string; key: string }[]; loreBudget: number; memory: MemorySent | null; dropped: number; problems: { found: Problem[]; omitted: number }; unseen: number };
 
 // What went wrong in a text outside the chat's messages the request was built from, at the block or entry it was rendered
 // for, once per text: from may match no part, when that text rendered to nothing and was left out. An error text counts
@@ -343,7 +351,7 @@ const UTILITY: Block[] = [
 // A chat whose prompt is gone has no block for an @@inject_at entry to go into.
 const conversationBlocks = (scope: ChatScope) => (scope.card?.utility ? UTILITY : (scope.prompt?.blocks ?? []));
 
-function conversation({ scope, seed, countTokens, budget, fit, continuing, answerInstruction, memory, tools, notes = '' }: PromptInput): Assembled | TooLong {
+function conversation({ scope, seed, countTokens, budget, fit, continuing, answerInstruction, memory, tools, notes = '', pictures }: PromptInput): Assembled | TooLong {
   const { prompt } = scope;
   const blocks = conversationBlocks(scope);
   const chat = renderChat('prompt', scope);
@@ -370,16 +378,21 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, answe
   if (continuing) out({ message: { role: 'user', content: CONTINUE }, from: { kind: 'continue' } });
   else if (scope.messages.at(-1)?.role === 'assistant') out({ message: { role: 'user', content: answerInstruction }, from: { kind: 'answer' } });
 
+  // Read from each message's text as stored, since the prompt's rendering drops the tags (cbs/tags.ts).
+  const sendable = new Map(scope.inlays.filter((inlay) => inlay.type !== SIGNATURE && (inlay.attached || pictures.moved)).map(({ name, id }) => [name, id]));
+  const shownIn = ({ role, text }: HistoryMessage) => (role === 'user' ? inlayIds([text]).flatMap((name) => sendable.get(name) ?? []) : []);
+  const unseen = pictures.seen ? 0 : scope.messages.slice(covered).reduce((count, message) => count + shownIn(message).length, 0);
   const messages = chat.texts
     .slice(covered)
     .map((text, offset): ChatSent => {
       const at = covered + offset;
-      const message = { role: scope.messages[at]!.role, content: text.trim() };
+      const inlays = pictures.seen ? shownIn(scope.messages[at]!) : [];
+      const message = { role: scope.messages[at]!.role, content: text.trim(), ...(inlays.length > 0 && { inlays }) };
       // The greeting has none: Risu sends it as no message of its chat, and bots find it as the assistant message with
       // no memo.
       return at === 0 && scope.greeting !== null ? { message } : { message, origin: scope.messages[at]!.message };
     })
-    .filter(({ message }) => message.content !== '');
+    .filter(({ message }) => message.content !== '' || message.inlays);
   const atDepth: { depth: number; sent: Sent }[] = laid.depths.map((entry) => ({ depth: entry.depth, sent: { message: loreMessage(laid, entry), from: depthFrom(laid, entry) } satisfies Sent })).filter(({ sent }) => sent.message.content !== '');
   const problems = problemsOf(laid, blocks);
   const lastUser = messages.findLastIndex(({ message }) => message.role === 'user');
@@ -394,7 +407,7 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, answe
         const id = 'id' in from ? from.id : undefined;
         const cbs = id ? [...laid.rendered.values()].filter(({ place, rendered }) => (place === id || place.startsWith(`${id}:`)) && rendered && message.content.includes(rendered)) : [];
         const source = from.kind === 'block' && from.slot === 'chat' ? origin === undefined ? undefined : sources.get(origin) : from.kind === 'block' && from.slot === 'memory' ? told?.text ?? recalled?.text : undefined;
-        return { from, tokens: tokens(message.content), ...(origin !== undefined && { origin }), ...(source !== undefined && { source }), ...(cbs.length > 0 && { cbs }) };
+        return { from, tokens: messageTokens(tokens, message), ...(origin !== undefined && { origin }), ...(source !== undefined && { source }), ...(cbs.length > 0 && { cbs }) };
       }),
       lore: activation && activation.fired.map((fired) => ({ ...fired, name: named(fired.id) })),
       silent: activation && activation.silent.map((silent) => ({ ...silent, name: named(silent.id) })),
@@ -403,6 +416,7 @@ function conversation({ scope, seed, countTokens, budget, fit, continuing, answe
       memory: told ? { by: told.name, text: told.text, covered, missing: 0, slot } : recalled && { by: null, sent: recalled.sent, found: retrieved?.ids ?? [], covered, missing: slot ? covered - recalled.held : covered, slot },
       dropped,
       problems,
+      unseen,
     };
   };
 

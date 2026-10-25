@@ -2,7 +2,7 @@ import { SIGNATURE } from '../engine/assets';
 import { backupInlays, inlayType, readInlays, type Inlays } from '../engine/import/backup';
 import { fileSource } from '../engine/import/source';
 import { counted } from '../engine/import/convert';
-import { inlayIds } from '../engine/import/risu-character';
+import { inlayIds } from '../engine/assets';
 import { mergeUnsupported, MOVE_UNSUPPORTED_KINDS, unsupportedCount, type BackupCatalog, type Card, type Imported, type MoveUnsupported, type RisuBackup, type RisuChat, type Unsupported } from '../engine/import/types';
 import { unused, type Unused } from '../engine/pipeline';
 import type { Chat } from '../model/chat';

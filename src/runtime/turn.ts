@@ -19,6 +19,8 @@ import { endCall } from './streams';
 import { resumeTranslation, translate, type TranslateFailure, type TranslationTarget } from './translate';
 import { findRecords } from './retrieval';
 import { preread } from './preread';
+import { withPictures } from './inlays';
+import { pictureLead } from '../engine/assets';
 import { agentsOf, preAgents } from './agents';
 import type { Preparing, Skip, StepFailure } from './turn-steps';
 
@@ -202,7 +204,7 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   if (!snapshot.ok) return { kind: 'unsent', failure: snapshot, ...kept };
   const calibration = snapshot.data;
   const fit = providerFit(route, settings, calibration.fit.allowance);
-  const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools, scope, seed: reply.id, budget, fit, continuing: reply.continues !== null, answerInstruction: answerInstructionOf(session.store), memory, notes: agents.notes }, signal));
+  const prompt = await evaluating(session.store.evaluation.prompt({ asker: 'send', chat }, { tools, scope, seed: reply.id, budget, fit, continuing: reply.continues !== null, answerInstruction: answerInstructionOf(session.store), memory, notes: agents.notes, pictures: turn.pictures }, signal));
   if ('kind' in prompt) return { ...prompt, ...kept };
   const requested = await session.scriptTurns.requesting(chat, turn, prompt, signal, (name) => preparing({ step: 'tools', running: name, since: Date.now() }));
   if (signal.aborted) return { kind: 'halted' };
@@ -213,6 +215,9 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
   const shortened = !skip.preread && featuresOf(session.store, turn.chat).preread ? await preread(session, chat, turn.chat, scope, rewritten, route, reply.id, signal, (retrying) => preparing({ step: 'preread', ...(retrying && { retrying }) })) : { prompt: rewritten, preread: null };
   if ('kind' in shortened) return { kind: 'preread', failure: shortened, ...kept };
   const sent = shortened.prompt;
+  // Last, so the worker and the bot's scripts carry each picture's id, never its bytes.
+  const pictured = await withPictures(session, sent);
+  if (!pictured.ok) return { kind: 'unsent', failure: pictured, ...kept };
   const before = [...(reply.before ?? []), ...requested.writes];
   const send = cacheSend({ turn, prompt: sent, calibration }, session.credentials.pool.peek(route.connection.value)?.id ?? null);
   const last = prior(session.store, chat, session.read.chat(chat).snapshot()!.messages, Date.now());
@@ -223,9 +228,10 @@ async function prepare(session: Session, chat: string, gathered: TurnContext, si
     const decision = calibration.refused(refusal, measurement);
     if (!decision) return null;
     const fitted = await evaluating(session.store.evaluation.rewrite({ asker: 'send', chat }, scope, { prompt: sent, messages: sent.messages, fit: { ...fit, allowance: decision.allowance } }, signal));
-    return 'kind' in fitted ? null : { prompt: fitted, fit: decision, retries: [...calibration.retries] };
+    const refitted = 'kind' in fitted ? null : await withPictures(session, fitted);
+    return refitted?.ok ? { prompt: refitted.data, fit: decision, retries: [...calibration.retries] } : null;
   };
-  return { route, settings, prompt: sent, ...(diagnose && { diagnose }), calibration: { fit: calibration.fit, retries: [] }, refit, said, ...(before.length > 0 && { before }), ...(against && { forecast: against }), ...(shortened.preread && { preread: shortened.preread }), ...(agents.runs.length > 0 && { agents: agents.runs }) };
+  return { route, settings, prompt: pictured.data, ...(diagnose && { diagnose }), calibration: { fit: calibration.fit, retries: [] }, refit, said, ...(before.length > 0 && { before }), ...(against && { forecast: against }), ...(shortened.preread && { preread: shortened.preread }), ...(agents.runs.length > 0 && { agents: agents.runs }) };
 }
 
 // The reply's message's other versions, the one it takes the place of first, are where its pre notes are found again.
@@ -252,7 +258,7 @@ export async function resumeSend(session: Pick<Session, 'store' | 'credentials' 
     if (!made.ok && made.failure.kind === 'stopped') return;
     const id = stream.value.result;
     const follows = purpose.follows !== undefined && { follows: purpose.follows };
-    const said = made.ok ? { id, text: made.translation.text, ...follows, translation: { ...made.translation, text: purpose.typed, sentIn: purpose.language } } : { id, text: purpose.typed, ...follows };
+    const said = made.ok ? { id, text: pictureLead(purpose.typed).lead + made.translation.text, ...follows, translation: { ...made.translation, text: purpose.typed, sentIn: purpose.language } } : { id, text: purpose.typed, ...follows };
     const saved = await appendUserMessage(session.store, stream.parent!, said);
     if (!saved.ok && saved.error === 'stopped') return;
     if (saved.ok || session.store.children('entry', stream.parent!).some((entry) => entry.id === id)) endCall(session.store, stream.id);
@@ -265,8 +271,11 @@ export async function resumeSend(session: Pick<Session, 'store' | 'credentials' 
 // message a second time, beside Talk's own save.
 async function sendTranslated(session: Session, chat: string, turn: TurnContext, signal: AbortSignal): Promise<TurnContext | Extract<TurnFailure, { kind: 'untranslated' }>> {
   const typed = turn.said!;
+  // The translation's text renders a picture's tag to nothing, so the pictures stay out of it and lead its result.
+  const { lead, text } = pictureLead(typed.text);
+  if (!text.trim()) return turn;
   const messages = session.read.chat(chat).snapshot()!.messages;
-  const input = translationInput(session, chat, turn.chat, messages, { kind: 'input', text: typed.text });
+  const input = translationInput(session, chat, turn.chat, messages, { kind: 'input', text });
   const { language } = input;
   const target: TranslationTarget = { id: crypto.randomUUID(), chat, result: typed.id, for: { kind: 'input', typed: typed.text, language, ...(typed.follows !== undefined && { follows: typed.follows }) } };
   session.streams.reading.add(target.id);
@@ -275,7 +284,7 @@ async function sendTranslated(session: Session, chat: string, turn: TurnContext,
   );
   endCall(session.store, target.id);
   if (!made.ok) return { kind: 'untranslated', failure: made.failure };
-  const sent = made.translation.text;
+  const sent = lead + made.translation.text;
   const last = turn.scope.messages.at(-1)!;
   return {
     ...turn,

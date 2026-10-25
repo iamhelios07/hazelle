@@ -40,8 +40,11 @@ const imageBlock = ({ type, data }: InputPicture) => ({ type: 'image', source: {
 export function wireMessage(message: ChatMessage, cache: Cache | undefined, picture: (picture: InputPicture) => object) {
   const marked = message.cache && cache;
   if (!marked && !carriesPictures(message)) return { role: message.role, content: message.content };
-  const text = { type: 'text', text: message.content, ...(marked ? cacheControl(cache) : {}) };
-  return { role: message.role, content: [...(message.pictures ?? []).map(picture), text] };
+  const mark = marked ? cacheControl(cache) : {};
+  const pictures = (message.pictures ?? []).map(picture);
+  // Pictures with no text send no text block, which Anthropic refuses empty; the cache point is then the last picture.
+  if (message.content === '' && pictures.length) return { role: message.role, content: pictures.with(-1, { ...pictures.at(-1), ...mark }) };
+  return { role: message.role, content: [...pictures, { type: 'text', text: message.content, ...mark }] };
 }
 
 // Every system message goes up into system, joined by a blank line. It stays one string unless a cache point falls in

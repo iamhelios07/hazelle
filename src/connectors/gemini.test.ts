@@ -69,10 +69,10 @@ describe('Gemini', () => {
     expect(JSON.parse(plain.body!)).toEqual({ contents: [{ role: 'user', parts: [{ text: '안녕' }] }] });
   });
 
-  it('sends pictures as inline data ahead of their message’s text, in the run of its role', () => {
-    const messages = [{ role: 'user' as const, content: '안녕' }, { role: 'user' as const, content: '이 사람은?', pictures: [{ type: 'image/png', data: 'AAAA' }] }];
+  it('sends pictures as inline data ahead of their message’s text, and no empty text after pictures alone, in the run of its role', () => {
+    const messages = [{ role: 'user' as const, content: '안녕' }, { role: 'user' as const, content: '이 사람은?', pictures: [{ type: 'image/png', data: 'AAAA' }] }, { role: 'user' as const, content: '', pictures: [{ type: 'image/png', data: 'BBBB' }] }];
     expect(JSON.parse(chatRequest(google, { model: { ...flash!, input: ['text', 'image'] }, messages, settings: {} }).body!).contents).toEqual([
-      { role: 'user', parts: [{ text: '안녕' }, { inlineData: { mimeType: 'image/png', data: 'AAAA' } }, { text: '이 사람은?' }] },
+      { role: 'user', parts: [{ text: '안녕' }, { inlineData: { mimeType: 'image/png', data: 'AAAA' } }, { text: '이 사람은?' }, { inlineData: { mimeType: 'image/png', data: 'BBBB' } }] },
     ]);
   });
 

@@ -84,8 +84,12 @@ export const entryTerms = (model: Starred) => [entryName(model), model.name, mod
 // caching on sends it, and a codec never puts the field itself on the wire.
 // pictures: shown to the model with a user message's text, each codec in its own wire shape. Sent only to a model that
 // sees pictures (seesPictures); a request carrying them to any other is refused before sending.
+// A message with pictures may have no text, and a codec then sends none.
+// inlays: the chat's inlay rows (their ids) the message shows the model, which runtime/pictures turns into pictures
+// just before the request leaves; no codec reads it. A turn carries these, not the bytes, through the evaluation
+// worker and the bot's scripts.
 // document: words the codec sends as a file of its own (Codec.pack), ahead of the pictures; set only by its pack.
-export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string; cache?: true; document?: string; pictures?: InputPicture[] };
+export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string; cache?: true; document?: string; pictures?: InputPicture[]; inlays?: string[] };
 // type: the media type; data: the bytes as base64.
 export type InputPicture = { type: string; data: string };
 // A model whose catalog does not say takes no picture: an unknown is never sent one.

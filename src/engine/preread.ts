@@ -1,5 +1,5 @@
 import { priceCost } from '../connectors/pricing';
-import { carriesPictures, type Cost, type Model } from '../connectors/types';
+import type { Cost, Model } from '../connectors/types';
 import type { PrereadPrompt } from '../model/prompt';
 import type { PrereadParts, PrereadSettings } from '../model/settings';
 import { fingerprint } from './memory';
@@ -95,7 +95,7 @@ export function prereadPlan(sent: Pick<Assembled, 'messages' | 'parts'>, { parts
   const who = identities(sent);
   const taken = messages.flatMap((message, at) => {
     const each = who[at];
-    return each && chosen[each.part] && !kept.has(at) && !carriesPictures(message) ? [at] : [];
+    return each && chosen[each.part] && !kept.has(at) && !message.inlays ? [at] : [];
   });
   if (!taken.length) return null;
   const material = taken

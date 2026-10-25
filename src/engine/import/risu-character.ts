@@ -1,5 +1,6 @@
 import { splitThoughts } from '../../connectors/thoughts';
 import { isRecord, list } from '../../connectors/values';
+import { inlayIds } from '../assets';
 import { assemble, imageType, type Resolve } from './card';
 import { add, chatLorebook, convert, counted, finite, record, text, type Json, type Tally } from './convert';
 import { MOVE_UNSUPPORTED_KINDS, type MoveUnsupported, type MoveUnsupportedKind, type Picture, type RisuCharacter, type RisuChat } from './types';
@@ -7,15 +8,6 @@ import { MOVE_UNSUPPORTED_KINDS, type MoveUnsupported, type MoveUnsupportedKind,
 export type Read = () => Promise<Uint8Array<ArrayBuffer>>;
 // The backup's entry for a Risu asset key; null when the backup lacks it.
 export type Entry = (key: string) => Read | null;
-
-const INLAY = /\{\{inlay(?:ed|eddata)?::(.+?)\}\}/g;
-
-// The ids of Risu's inlay store the texts name, each once, in order.
-export function inlayIds(texts: Iterable<string>): string[] {
-  const ids = new Set<string>();
-  for (const text of texts) for (const [, id] of text.matchAll(INLAY)) ids.add(id!);
-  return [...ids];
-}
 
 const messageTexts = (messages: unknown[]) => messages.filter(isRecord).map((message) => text(message.data));
 

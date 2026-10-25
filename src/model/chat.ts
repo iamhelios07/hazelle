@@ -42,6 +42,9 @@ export type Chat = Mark & {
   features?: FeatureSwitches;
   // 에이전트, stacked after its character's (runtime/agents agentsOf).
   agents?: string[];
+  // 옮겨 온 그림도 보내기: the inlays brought with it from Risu go to a model that sees pictures, as the ones attached here
+  // always do (model/library Inlay).
+  movedPictures?: true;
 };
 
 // name: only one the user gave.

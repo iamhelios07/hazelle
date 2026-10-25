@@ -31,6 +31,21 @@ export const SIGNATURE = 'signature';
 // and never the picture. Items of Risu's inlay store, which the chat holds by the tag's id exactly, never by findAsset's
 // near match. A signature is never drawn; an item the chat lacks shows the app's mark.
 const INLAY_TAG = /\{\{(inlay|inlayed|inlayeddata)::(.+?)\}\}/g;
+
+// The names of the chat's inlays the texts name, each once, in order: Risu's inlay store ids, or an attached picture's.
+export function inlayIds(texts: Iterable<string>): string[] {
+  const ids = new Set<string>();
+  for (const text of texts) for (const [, , id] of text.matchAll(INLAY_TAG)) ids.add(id!);
+  return [...ids];
+}
+
+// A message with pictures attached in the composer: their tags lead it, each a paragraph's line before the text.
+// pictureLead takes them off again, for a step that must not touch them (the translation of a message sent translated).
+export const pictured = (names: readonly string[], text: string) => [names.map((name) => `{{inlay::${name}}}`).join(''), text].filter(Boolean).join('\n\n');
+export function pictureLead(text: string): { lead: string; text: string } {
+  const lead = /^(?:\{\{inlay::[^}]+\}\})+(?:\n\n|$)/.exec(text)?.[0] ?? '';
+  return { lead, text: text.slice(lead.length) };
+}
 export const placeInlays = (text: string, inlays: readonly { id: string; name: string; type: string }[]) =>
   text.replace(INLAY_TAG, (_, kind: string, name: string) => {
     const inlay = inlays.find((each) => each.name === name);

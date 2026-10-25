@@ -14,6 +14,7 @@ const sent = (rows: Row[]): Assembled => ({
   memory: null,
   dropped: 0,
   problems: { found: [], omitted: 0 },
+  unseen: 0,
 });
 
 const MAIN: Row = [{ kind: 'block', id: 'main', name: null, slot: null }, { role: 'system', content: 'Rules' }];
@@ -27,7 +28,7 @@ const PROMPT = sent([
   said('a', 'user', 'first'),
   said('b', 'assistant', 'second'),
   [{ kind: 'depth', id: 'd', name: '비밀', depth: 1 }, { role: 'system', content: 'A secret' }],
-  [chat, { role: 'user', content: 'with a picture', pictures: [{ type: 'image/png', data: 'AA' }] }, 'p'],
+  [chat, { role: 'user', content: 'with a picture', inlays: ['row-p'] }, 'p'],
   said('c', 'assistant', 'third'),
   said('e', 'user', 'latest'),
   [{ kind: 'answer' }, { role: 'user', content: 'Answer' }],

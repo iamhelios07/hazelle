@@ -19,7 +19,7 @@ import type { TurnFailure } from '../../runtime/turn';
 import { SHARE_LIMITS } from '../../contracts/shares';
 import { count } from './typedNumber';
 import { withParticle } from './particles';
-import { BIN, BOT_STUCK, DISCOUNT, inSettings, MODEL_ROLES, MODEL_SETTINGS, NEEDS_ACCOUNT, PRE_READ, SHARE, UNREADABLE_IMAGE } from './words';
+import { BIN, BOT_STUCK, DISCOUNT, inSettings, MODEL_ROLES, MODEL_SETTINGS, NEEDS_ACCOUNT, NO_PICTURES, PRE_READ, SHARE, UNREADABLE_IMAGE } from './words';
 
 // The server's codes left on the generic fallback, which names the code for the operator. Every other server code needs
 // words in MESSAGES; its remaining keys are codes the runtime makes itself.
@@ -160,7 +160,7 @@ const REFUSED: Record<string, string> = {
   'unreadable-key': '키를 읽지 못했어요. 키 파일의 내용을 그대로 붙여 넣어 주세요.',
   'unsupported-protocol': '이 모델의 요청 방식은 지원하지 않아요.',
   'image-only': '이미지만 만드는 모델이라 대화에는 쓸 수 없어요.',
-  'no-picture-input': '이 모델은 이미지를 읽을 수 없어요.',
+  'no-picture-input': NO_PICTURES,
   'too-many-characters': '이 모델이 한 장면에 그릴 수 있는 최대 인물 수를 넘었어요.',
   'unknown-model': '현재 버전에서 알 수 없는 모델이에요. 화면을 새로고침해 주세요.',
   'unknown-sampler': '이 모델이 지원하지 않는 샘플러예요. 삽화 프롬프트에서 샘플러를 다시 선택해 주세요.',
