@@ -4,7 +4,7 @@ import type { Blocked } from '../../runtime/turn-context';
 import { describeTurnFailure } from '../common/failure';
 import { withParticle } from '../common/particles';
 import { ACTS } from '../common/acts';
-import { ANSWER, NO_PICTURES } from '../common/words';
+import { ANSWER, NO_PICTURES, UNKNOWN_PICTURES } from '../common/words';
 import type { PromptDoor } from '../common/TaskPrompt';
 import { navigate } from '../shell/router';
 import { keysOf, SHORTCUTS, titled, typing, useShortcut } from '../shortcuts';
@@ -25,7 +25,7 @@ import { promptEditor } from './panels';
 import type { OpenChat } from './useChat';
 
 const LEAVING = '가장 오래된 메시지가 요청에서 빠지는데, 장기 기억에도 없어서 모델이 그 내용을 알 수 없어요.';
-const UNSEEN = `${NO_PICTURES} 이미지는 빼고 글만 보내고, 이미지만 있는 메시지는 보내지 않아요.`;
+const UNSEEN = '이미지는 빼고 글만 보내고, 이미지만 있는 메시지는 보내지 않아요.';
 
 type Chip = 'model' | 'prompt' | 'persona' | 'profile';
 const FIX = {
@@ -149,7 +149,7 @@ export function ChatComposer({ chat, folded }: { chat: OpenChat; folded: boolean
         actions={
           <>
             {!busy && chat.sendNotes.leaving ? <SendNote label={`메시지 ${chat.sendNotes.leaving}개`} title="요청에서 빠질 메시지" warning={{ words: '기억에 없음', why: LEAVING }} /> : null}
-            {!busy && unseen > 0 && <SendNote label={`이미지 ${unseen}개`} title="모델에 가지 않는 이미지" warning={{ words: '보내지 않음', why: UNSEEN }} />}
+            {!busy && unseen > 0 && <SendNote label={`이미지 ${unseen}개`} title="모델에 가지 않는 이미지" warning={{ words: '보내지 않음', why: `${attachments.sees === null ? UNKNOWN_PICTURES : NO_PICTURES} ${UNSEEN}` }} />}
             {indexing && <SendNote label={`기억 검색 준비 ${indexing.done}/${indexing.total}`} title="장기 기억 검색 준비" onClick={() => actions.memory(null)} />}
             {!busy && <ChatCache cache={chat.sendNotes.cache} onOpen={() => chat.actions.openInspect('request')} />}
             <SendButton

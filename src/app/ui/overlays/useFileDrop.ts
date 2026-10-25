@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 
-// How many screens that take dropped files of their own are mounted; while one is, the app-wide drop stands aside.
-let screens = 0;
+// The screens that take dropped files of their own, in the order mounted: while one is, the app-wide drop stands aside,
+// and only the last takes a drop, as an editor's 에셋 opened in a panel beside a chat that takes pictures.
+const screens: symbol[] = [];
 
 // A drag enters the next element before it leaves the last, so only a leave from the element last entered means it left
 // the page or was cancelled. Content replaced under the pointer, as a streaming reply is, gets its leave sent to a node
@@ -12,9 +13,10 @@ export function useFileDrop(onDrop: (files: File[]) => void, scope: 'app' | 'scr
   const latest = useRef(onDrop);
   latest.current = onDrop;
   useEffect(() => {
-    if (scope === 'screen') screens += 1;
+    const own = Symbol();
+    if (scope === 'screen') screens.push(own);
     let entered: EventTarget | null = null;
-    const carriesFiles = (event: DragEvent) => (scope === 'screen' || screens === 0) && (event.dataTransfer?.types.includes('Files') ?? false);
+    const carriesFiles = (event: DragEvent) => (scope === 'screen' ? screens.at(-1) === own : screens.length === 0) && (event.dataTransfer?.types.includes('Files') ?? false);
     const enter = (event: DragEvent) => {
       if (!carriesFiles(event)) return;
       // Cancelled like dragover: when the element under the pointer changed since the last tick, the browser takes the
@@ -46,7 +48,7 @@ export function useFileDrop(onDrop: (files: File[]) => void, scope: 'app' | 'scr
     window.addEventListener('dragover', over);
     window.addEventListener('drop', drop);
     return () => {
-      if (scope === 'screen') screens -= 1;
+      if (scope === 'screen') screens.splice(screens.indexOf(own), 1);
       window.removeEventListener('dragenter', enter);
       window.removeEventListener('dragleave', leave);
       window.removeEventListener('dragover', over);

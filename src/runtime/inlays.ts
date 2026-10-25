@@ -28,11 +28,19 @@ export async function addDraftPicture({ drafts, files }: { drafts: Drafts; files
 }
 
 // The chat's rows for a send's pictures, before the turn that reads them: one the chat already holds by its name, kept
-// from a send that failed after it, is not written again.
-export function keepPictures(store: ObjectStore, chat: string, pictures: readonly Inlay[]): Promise<ApiResult<null>> {
-  const held = new Set(store.children('inlay', chat).map(({ value }) => value.name));
-  const writes = pictures.filter(({ name }) => !held.has(name)).map((value): Write => ({ type: 'create', kind: 'inlay', id: crypto.randomUUID(), parent: chat, value }));
-  return writes.length ? store.batch(writes) : Promise.resolve({ ok: true, data: null });
+// from a send that failed after it, is not written again. Held here, since a new chat's screen holds it only a render
+// after its first save.
+export async function keepPictures(store: ObjectStore, chat: string, pictures: readonly Inlay[]): Promise<ApiResult<null>> {
+  const lease = store.retainChat(chat);
+  try {
+    const unloaded = await lease.ready;
+    if (unloaded) return unloaded;
+    const held = new Set(store.children('inlay', chat).map(({ value }) => value.name));
+    const writes = pictures.filter(({ name }) => !held.has(name)).map((value): Write => ({ type: 'create', kind: 'inlay', id: crypto.randomUUID(), parent: chat, value }));
+    return writes.length ? await store.batch(writes) : { ok: true, data: null };
+  } finally {
+    lease.release();
+  }
 }
 
 // The pictures a prompt's messages name (ChatMessage inlays), read as the request leaves. One brought from Risu is drawn
