@@ -54,13 +54,14 @@ function cause(cause: CacheCause): { line: string; shown?: ReactNode; help: stri
   }
 }
 
-// The cause of the part broken names, for the sentence that names it; none for a break of the whole call (expired, model),
-// whose diagnosis still lists changed parts that are not why it reads nothing.
-export function firstCause(diagnosis: CacheDiagnosis | null | undefined, broken: CacheBreak): string | null {
+// The causes of the part broken names, for the sentence that names it; none for a break of the whole call (expired, model),
+// whose diagnosis still lists changed parts that are not why it reads nothing. Every cause, since they compound: a lore
+// entry turning on reads nothing only because its system message is hoisted to the front.
+export function breakCauses(diagnosis: CacheDiagnosis | null | undefined, broken: CacheBreak): string | null {
   if (!('from' in broken)) return null;
   const part = diagnosis?.parts.find(({ kind, from, role }) => kind === broken.kind && role === broken.role && JSON.stringify(from) === JSON.stringify(broken.from));
-  const named = part?.causes.find(({ kind }) => kind !== 'unknown');
-  return named ? cause(named).line : null;
+  const named = part?.causes.filter(({ kind }) => kind !== 'unknown') ?? [];
+  return named.length ? named.map((each) => cause(each).line).join(' ') : null;
 }
 
 export const diagnosed = (diagnosis: CacheDiagnosis | null | undefined, kind: BrokenPart['kind'], at: number) =>
@@ -87,7 +88,7 @@ export function BrokenPartView({ part }: { part: BrokenPart }) {
           <>
             <Text variant="note">바뀐 곳</Text>
             <TextDiff runs={diff.runs} label={`${partName(part.from, part.role)}: 직전 요청과 비교`} />
-            {diff.coarse && <Text variant="note">달라진 곳이 길어서 글자 단위로 맞추지 않고 통째로 보여 줘요.</Text>}
+            {diff.coarse && <Text variant="note">달라진 곳이 길어서 하나하나 맞추지 않고 통째로 보여 줘요.</Text>}
           </>
         )
       )}

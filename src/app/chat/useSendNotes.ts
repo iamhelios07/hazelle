@@ -56,7 +56,7 @@ export function useSendNotes(id: string, unsaved: Unsaved | null, chat: Chat, me
         const made = send && forecast(before, send);
         if (!made || !sending || !send) return setNext(null);
         const pending = needsDiagnosis(made);
-        const next = { forecast: made, diagnosis: pending ? undefined : null, cost: breakCost(sending.turn.route.connection.value, sending.turn.route.model, made), route: sending.turn.route };
+        const next = { forecast: made, diagnosis: pending ? undefined : null, cost: breakCost(sending.turn.route.connection.value, sending.turn.route.model, made, sending.calibration.estimate.centre), route: sending.turn.route };
         setNext(next);
         if (pending) void diagnoseCache(session.store.evaluation, id, sending.turn.scope, made, before ? session.log.entry(id, before.print.call) : null, sending.prompt, send.wire, controller.signal).then((diagnosis) => {
           if (!controller.signal.aborted) setNext({ ...next, diagnosis });

@@ -7,7 +7,7 @@ import { ago } from '../common/time';
 import { FEATURE_NAMES, ROLE_TAGS, SCRIPTS, STAGE_NAMES, TOOL, UNKNOWN } from '../common/words';
 import { useSession } from '../session';
 import { Button, Callout, Disclosure, Empty, List, ListItem, Section, Stack, Text } from '../ui';
-import { BrokenPartView, breakKind, firstCause, ShortfallNote } from './CacheDiagnosis';
+import { BrokenPartView, breakKind, breakCauses, ShortfallNote } from './CacheDiagnosis';
 import { BROKEN, why } from './ChatCache';
 import { partName, SentRequest, SentResponse } from './ChatSent';
 
@@ -85,7 +85,7 @@ function Row({ entry, open, onToggle }: { entry: LogEntry; open: boolean; onTogg
       detail={
         (open || broken || short?.short) && (
           <Stack gap="related">
-            {broken && <Text variant="note">{[`${BROKEN}: ${why(broken, null)}`, firstCause(entry.diagnosis, broken)].filter(Boolean).join(' ')}</Text>}
+            {broken && <Text variant="note">{[`${BROKEN}: ${why(broken, null)}`, breakCauses(entry.diagnosis, broken)].filter(Boolean).join(' ')}</Text>}
             <ShortfallNote receipt={receipt} entry={entry} />
             {open && (
               <>

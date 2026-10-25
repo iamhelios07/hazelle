@@ -195,12 +195,14 @@ export function forecast(last: Prior | null, next: CacheSend): Forecast | null {
 }
 
 // What the next send's input would cost as forecast, and had it read all the last call cached, from the model's
-// price; null without one. Both write what the next send caches past what they read.
-export function breakCost(connection: Connection, model: Model, { parts, written, against }: Forecast): { paid: Cost; whole: Cost } | null {
+// price; null without one. Both write what the next send caches past what they read. ratio: the model's native tokens
+// per o200k token (the send's calibrated centre), since the provider bills its own count and parts hold o200k.
+export function breakCost(connection: Connection, model: Model, { parts, written, against }: Forecast, ratio: number): { paid: Cost; whole: Cost } | null {
   if (!model.price || !against?.broken) return null;
-  const inputTokens = parts.reduce((sum, { tokens }) => sum + tokens, 0);
+  const native = (count: number) => Math.round(count * ratio);
+  const inputTokens = native(parts.reduce((sum, { tokens }) => sum + tokens, 0));
   const unit = costUnit(resolveConnection(connection)?.type ?? null);
-  const cost = (cached: number, write: number) => priceCost(model.price!, { inputTokens, outputTokens: 0, reasoningTokens: null, cachedInputTokens: cached, cacheWriteInputTokens: write }, unit);
+  const cost = (cached: number, write: number) => priceCost(model.price!, { inputTokens, outputTokens: 0, reasoningTokens: null, cachedInputTokens: native(cached), cacheWriteInputTokens: native(write) }, unit);
   const ends = against.read + written;
   const paid = cost(against.read, written);
   const whole = cost(Math.min(against.of, ends), Math.max(ends - against.of, 0));

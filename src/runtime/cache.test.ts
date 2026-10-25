@@ -8,7 +8,8 @@ import type { Message, Receipt } from '../model/chat';
 import type { Role } from '../model/prompt';
 import { cacheRecurrence, cacheShortfall, shortfallPlace } from './cache-diagnosis';
 import type { LogEntry } from './request-log';
-import { forecast, lastCache, type CacheSend, type Prior } from './cache';
+import type { Connection, Model } from '../connectors/types';
+import { breakCost, forecast, lastCache, type CacheSend, type Prior } from './cache';
 
 // Each message counts 10 tokens and is named by its text, which is its hash; a trailing ✓ puts a cache point after it.
 const send = (texts: string[], over: { connection?: string; account?: string | null; model?: string; facts?: CacheFacts } = {}): CacheSend => ({
@@ -129,6 +130,16 @@ describe('forecast', () => {
     const far = forecast(before(['sys ✓', 'u1', 'a1 ✓']), send(['sys ✓', 'u1', 'a1', 'l1', 'l2', 'u2 ✓'], { facts }))!;
     expect(far.against).toEqual({ read: 0, of: 30, broken: { kind: 'far' } });
   });
+});
+
+it('prices a break in the model\'s native tokens, not the o200k counts the parts hold', () => {
+  const made = forecast(before(['sys ✓', 'u1', 'a1 ✓']), send(['sys ✓', 'lore', 'u1', 'a1 ✓', 'u2 ✓']))!;
+  const model = { id: 'm1', price: { input: 4, output: 20, cacheRead: 0.2, cacheWrite: 5, tiers: [] } } as unknown as Model;
+  const connection = { type: 'anthropic', label: '', baseUrl: null } as unknown as Connection;
+  const o200k = breakCost(connection, model, made, 1)!;
+  const native = breakCost(connection, model, made, 1.6)!;
+  expect(native.paid.amount).toBeCloseTo(o200k.paid.amount * 1.6, 12);
+  expect(native.whole.amount).toBeCloseTo(o200k.whole.amount * 1.6, 12);
 });
 
 describe('lastCache', () => {
