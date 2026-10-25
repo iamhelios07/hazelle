@@ -7,16 +7,16 @@ import { LegalNotice } from '../common/LegalNotice';
 import { count } from '../common/typedNumber';
 import { useLoaded } from '../common/useLoaded';
 import { PULSE } from '../common/words';
-import { Bars, Brand, ChoiceGroup, Divider, Empty, Facts, Intro, Screen, Ranking, Section, SettingRow, Switch, Tabs } from '../ui';
-import { clockText, hourDetail, hourText, PULSE_ROLE_NAMES, rankRows, weekText } from './board';
+import { Bars, Brand, ChoiceGroup, Disclosure, Divider, Empty, Facts, Intro, Screen, Ranking, Section, SettingRow, Switch, Tabs } from '../ui';
+import { belowNames, clockText, hourDetail, hourText, PULSE_ROLE_NAMES, rankRows, REST, weekText } from './board';
 
 const SPLIT = '제공자별로 보기';
 const CURRENT = 'current';
 
 // Says what PulseBefore compares (contracts/pulse.ts); change both together.
 const RANKING_HELP = {
-  current: `이번 주에 ${PULSE_FLOORS.row}명 이상 쓴 모델이 순위에 올라요. 대화는 최근 24시간 동안 응답을 받은 사람이 ${PULSE_FLOORS.row}명 이상이어야 해요. 순위 변동은 대화는 그 전 24시간, 다른 역할은 지난주와 비교해요. 비교할 기간이 다 집계되지 않았거나 쓴 사람이 ${PULSE_FLOORS.board}명이 안 됐으면 표시하지 않아요.`,
-  earlier: `그 주에 ${PULSE_FLOORS.row}명 이상 쓴 모델이 순위에 올라요. 순위 변동은 그 전 주와 비교해요. 그 전 주가 다 집계되지 않았거나 쓴 사람이 ${PULSE_FLOORS.board}명이 안 됐으면 표시하지 않아요.`,
+  current: `이번 주에 ${PULSE_FLOORS.row}명 이상 쓴 모델이 순위에 올라요. 대화는 최근 24시간 동안 응답을 받은 사람이 ${PULSE_FLOORS.row}명 이상이어야 해요. 순위 변동은 대화는 그 전 24시간, 다른 역할은 지난주와 비교해요. 비교할 기간이 다 집계되지 않았거나 쓴 사람이 ${PULSE_FLOORS.board}명이 안 됐으면 표시하지 않아요. ${PULSE_FLOORS.row}명이 안 되는 모델은 ${REST}에 숫자 없이 많이 쓴 순서대로 이름만 보여 줘요.`,
+  earlier: `그 주에 ${PULSE_FLOORS.row}명 이상 쓴 모델이 순위에 올라요. 순위 변동은 그 전 주와 비교해요. 그 전 주가 다 집계되지 않았거나 쓴 사람이 ${PULSE_FLOORS.board}명이 안 됐으면 표시하지 않아요. ${PULSE_FLOORS.row}명이 안 되는 모델은 ${REST}에 숫자 없이 많이 쓴 순서대로 이름만 보여 줘요.`,
 };
 
 // main.tsx asks before the account flow, as for /terms: the page reads the same signed in or out.
@@ -109,6 +109,15 @@ function EarlierWeek({ from, role, split }: { from: number; role: PulseRole; spl
 
 function Standing({ role, split, ranking, before, earlier }: { role: PulseRole; split: boolean; ranking: PulseRanking; before: PulseOrder | null; earlier: boolean }) {
   const rows = rankRows(ranking, before, split, earlier);
-  if (!rows.length) return <Empty variant="section">{earlier ? '순위에 오른 모델이 없었어요.' : '아직 순위에 오른 모델이 없어요.'}</Empty>;
-  return <Ranking label={`${PULSE_ROLE_NAMES[role]} 모델 순위`} items={rows} />;
+  const below = belowNames(ranking, split);
+  return (
+    <>
+      {rows.length ? (
+        <Ranking label={`${PULSE_ROLE_NAMES[role]} 모델 순위`} items={rows} />
+      ) : (
+        <Empty variant="section">{earlier ? '순위에 오른 모델이 없었어요.' : '아직 순위에 오른 모델이 없어요.'}</Empty>
+      )}
+      {below.length > 0 && <Disclosure label={`${REST} ${count(below.length)}개`}>{below.join(' · ')}</Disclosure>}
+    </>
+  );
 }

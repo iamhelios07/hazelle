@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest';
 import { DIRECT_TYPE } from '../../contracts/pulse';
-import { hourDetail, percent, providerName, rankRows, weekText } from './board';
+import { belowNames, hourDetail, percent, providerName, rankRows, weekText } from './board';
 
 it('names a provider by its connection type, 직접 연결 for the generic one, and none for a type this build does not list', () => {
   expect(providerName('openrouter')).toBe('OpenRouter');
@@ -36,6 +36,16 @@ it('closes the 대화 list with the rows below the floor, its bar against the la
     { rank: null, name: '순위 밖 모델', note: '응답 130번', value: '75%', share: 1 },
   ]);
   expect(rankRows({ merged: [], split: [], rest }, null, true, false)).toEqual([]);
+});
+
+it('names the rows below the floor in the server order, with the provider in the split view, and none where none are listed', () => {
+  const below = {
+    merged: [{ key: 'b', model: 'B' }, { key: 'a', model: 'A' }],
+    split: [{ key: 'b', model: 'B', type: 'openrouter' }, { key: 'a', model: 'A', type: 'from-a-newer-build' }, { key: 'c', model: 'C', type: 'openrouter' }],
+  };
+  expect(belowNames({ merged: [], split: [], below }, false)).toEqual(['B', 'A']);
+  expect(belowNames({ merged: [], split: [], below }, true)).toEqual(['B (OpenRouter)', 'C (OpenRouter)']);
+  expect(belowNames({ merged: [], split: [] }, false)).toEqual([]);
 });
 
 it('marks a move against the earlier places counted by the same rules, and nothing where the earlier period was not whole', () => {

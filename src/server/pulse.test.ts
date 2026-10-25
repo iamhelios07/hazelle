@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { PULSE_HEADER, VISITOR_HEADER } from '../contracts/http';
-import { pulseHeader, type PulseAnswer, type PulseRole } from '../contracts/pulse';
+import { pulseHeader, type PulseAnswer, type PulseRole, type PulseWeek } from '../contracts/pulse';
 import { tokenBucket } from './limits';
 import { forgetPulse, forwarded, type Pulse } from './pulse';
 import { replyKey, testApp } from './testing';
@@ -130,6 +130,7 @@ it('merges one model across lists by its name and ranks 대화 by the last 24 ho
     split: [{ key: '', model: null, type: 'openrouter', share: 5 / 19, people: 5, replies: 10 }],
     // GLM's split rows have 3 and 2 people, so its 14 replies are 순위 밖 there.
     rest: { merged: { share: 0, replies: 0 }, split: { share: 14 / 19, replies: 10 } },
+    below: { merged: [], split: [{ key: 'glm 5.2', model: 'GLM-5.2', type: 'openrouter' }, { key: 'glm 5.2', model: 'GLM 5.2', type: 'deepinfra' }] },
   });
 });
 
@@ -178,18 +179,31 @@ it('keeps counting across a restart, and forgets a person who left', async () =>
   for (const table of ['pulse_seen', 'pulse_used', 'pulse_replies']) expect(await t.env.db.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE account = ?`).bind(left!.account).first('n')).toBe(0);
 });
 
-it('closes a past week into the totals that passed the floors and deletes its lists', async () => {
+it('closes a past week into the totals that passed the floors, the names under them in order, and deletes its lists', async () => {
+  await t.env.db.prepare("INSERT INTO models_dev (list, model, name) VALUES ('openrouter', 'p', 'P'), ('openrouter', 'q', 'Q')").run();
   const cookies = await people(10);
   await seen(cookies);
   for (const cookie of cookies.slice(0, 5)) await call(cookie, 'chat', 'direct', 'tune');
   await call(cookies[5]!, 'aux', 'direct', 'tune');
+  for (const cookie of cookies.slice(6, 8)) await call(cookie, 'aux', 'openrouter', 'p');
+  await call(cookies[8]!, 'aux', 'openrouter', 'q');
   await forgetPulse(t.env.db, NOON + WEEK);
+  expect((await t.env.db.prepare('SELECT key, type, place FROM pulse_week_below ORDER BY place').all()).results).toEqual([
+    { key: 'p', type: '', place: 0 },
+    { key: 'p', type: 'openrouter', place: 1 },
+    { key: 'q', type: '', place: 2 },
+    { key: 'q', type: 'openrouter', place: 3 },
+  ]);
   expect((await t.env.db.prepare('SELECT week, role, people FROM pulse_week_roles').all()).results).toEqual([{ week: WEEK_FROM, role: 'chat', people: 5 }]);
   expect((await t.env.db.prepare('SELECT role, key, type, people FROM pulse_week_models ORDER BY type').all()).results).toEqual([{ role: 'chat', key: '', type: '', people: 5 }, { role: 'chat', key: '', type: 'direct', people: 5 }]);
   for (const table of ['pulse_seen', 'pulse_used']) expect(await t.env.db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first('n')).toBe(0);
   at(NOON + WEEK);
   await seen(cookies);
   expect((await board())!.weeks).toEqual([WEEK_FROM]);
+  expect(((await (await t.get(`pulse/weeks/${WEEK_FROM}`)).json()) as PulseWeek).ranking.aux.below).toEqual({
+    merged: [{ key: 'p', model: 'P' }, { key: 'q', model: 'Q' }],
+    split: [{ key: 'p', model: 'P', type: 'openrouter' }, { key: 'q', model: 'Q', type: 'openrouter' }],
+  });
 });
 
 it("names a merged row in the spelling most people used, not most provider uses", async () => {

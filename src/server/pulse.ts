@@ -7,6 +7,7 @@ import {
   PULSE_FLOORS,
   PULSE_ROLES,
   type PulseAnswer,
+  type PulseBelow,
   type PulseBoard,
   type PulseLabel,
   type PulseOrder,
@@ -126,11 +127,22 @@ export function openPulse(db: Db, clock: () => number = Date.now): Pulse {
 
 // type: '' for the row merged across connection types.
 type WeekRow = { role: PulseRole; key: string; type: string; name: string | null; people: number };
-// A week as its totals are kept: what passed the floors only.
-type Week = { people: number; roles: Map<PulseRole, number>; models: WeekRow[] };
+type WeekName = Omit<WeekRow, 'people'>;
+// A week as its totals are kept: what passed the floors, and the named rows under them in order, never counted.
+type Week = { people: number; roles: Map<PulseRole, number>; models: WeekRow[]; below: WeekName[] };
 
 const mostCounted = (names: Map<string | null, number>) => [...names].reduce<[string | null, number]>((best, each) => (each[1] > best[1] ? each : best), [null, 0])[0];
 const add = <K>(map: Map<K, number>, key: K, count: number) => map.set(key, (map.get(key) ?? 0) + count);
+
+// Most counted first; ties by name, 기타 last, then by connection type, so a place among equals tells nothing.
+function sortCounted<T>(rows: T[], of: (row: T) => [count: number, name: string | null, type: string]): T[] {
+  const last = '\uffff';
+  return rows.sort((a, b) => {
+    const [aCount, aName, aType] = of(a);
+    const [bCount, bName, bType] = of(b);
+    return bCount - aCount || (aName ?? last).localeCompare(bName ?? last) || aType.localeCompare(bType);
+  });
+}
 
 // The week's lists counted: each row's spelling is the one most of its people used.
 async function countWeek(db: Db, week: number): Promise<Week | null> {
@@ -151,22 +163,31 @@ async function countWeek(db: Db, week: number): Promise<Week | null> {
     add(people, `${row.role}\0${row.key}\0${row.type}`, row.people);
   }
   for (const row of merged.results) people.set(`${row.role}\0${row.key}\0`, row.people);
-  const models = [...people].flatMap(([id, count]) => {
+  const rows = [...people].map(([id, count]): WeekRow => {
     const [role, key, type] = id.split('\0') as [PulseRole, string, string];
-    return count < PULSE_FLOORS.row ? [] : [{ role, key, type, name: mostCounted(names.get(id)!), people: count }];
+    return { role, key, type, name: mostCounted(names.get(id)!), people: count };
   });
-  return { people: seen!, roles: new Map(roles.results.filter((row) => row.people >= PULSE_FLOORS.row).map((row) => [row.role, row.people])), models };
+  return {
+    people: seen!,
+    roles: new Map(roles.results.filter((row) => row.people >= PULSE_FLOORS.row).map((row) => [row.role, row.people])),
+    models: rows.filter((row) => row.people >= PULSE_FLOORS.row),
+    below: sortCounted(
+      rows.filter((row) => row.key && row.people < PULSE_FLOORS.row),
+      (row) => [row.people, row.name, row.type],
+    ).map(({ role, key, type, name }) => ({ role, key, type, name })),
+  };
 }
 
 // null for a week that never passed PULSE_FLOORS.board, whose lists were never shown.
 async function keptWeek(db: Db, week: number): Promise<Week | null> {
   const people = await db.prepare('SELECT people FROM pulse_week WHERE week = ?').bind(week).first<number>('people');
   if (people === null) return null;
-  const [roles, models] = await Promise.all([
+  const [roles, models, below] = await Promise.all([
     db.prepare('SELECT role, people FROM pulse_week_roles WHERE week = ?').bind(week).all<{ role: PulseRole; people: number }>(),
     db.prepare('SELECT role, key, type, name, people FROM pulse_week_models WHERE week = ?').bind(week).all<WeekRow>(),
+    db.prepare('SELECT role, key, type, name FROM pulse_week_below WHERE week = ? ORDER BY place').bind(week).all<WeekName>(),
   ]);
-  return { people, roles: new Map(roles.results.map((row) => [row.role, row.people])), models: models.results };
+  return { people, roles: new Map(roles.results.map((row) => [row.role, row.people])), models: models.results, below: below.results };
 }
 
 // Every week before now's: its totals written as it was shown, its lists deleted, in one transaction.
@@ -182,6 +203,9 @@ async function closeWeeks(db: Db, now: number) {
             ...counted.models.map((row) =>
               db.prepare('INSERT INTO pulse_week_models (week, role, key, type, name, people) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING').bind(week, row.role, row.key, row.type, row.name, row.people),
             ),
+            ...counted.below.map((row, place) =>
+              db.prepare('INSERT INTO pulse_week_below (week, role, key, type, name, place) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING').bind(week, row.role, row.key, row.type, row.name, place),
+            ),
           ]
         : []),
       ...['pulse_seen', 'pulse_used', 'pulse_guest_seen', 'pulse_guest_used'].map((table) => db.prepare(`DELETE FROM ${table} WHERE week = ?`).bind(week)),
@@ -193,19 +217,26 @@ const rounded = (count: number) => Math.round(count / PULSE_FLOORS.round) * PULS
 const typed = (type: string) => (type ? { type } : {});
 const byRole = <T>(made: (role: PulseRole) => T) => Object.fromEntries(PULSE_ROLES.map((role) => [role, made(role)])) as Record<PulseRole, T>;
 const ranked = (rows: { count: number; row: PulseRow }[]): PulseRanking => {
-  const last = '￿';
-  const sorted = rows
-    .sort((a, b) => b.count - a.count || (a.row.model ?? last).localeCompare(b.row.model ?? last) || (a.row.type ?? '').localeCompare(b.row.type ?? ''))
-    .map(({ row }) => row);
+  const sorted = sortCounted(rows, ({ count, row }) => [count, row.model, row.type ?? '']).map(({ row }) => row);
   return { merged: sorted.filter((row) => row.type === undefined), split: sorted.filter((row) => row.type !== undefined) };
+};
+// rows: in order already.
+const listed = (rows: PulseBelow[]): Pick<PulseRanking, 'below'> => {
+  const view = (split: boolean) => {
+    const own = rows.filter((row) => (row.type !== undefined) === split);
+    return own.length < PULSE_FLOORS.below ? [] : own;
+  };
+  const below = { merged: view(false), split: view(true) };
+  return below.merged.length || below.split.length ? { below } : {};
 };
 const place = ({ key, type }: PulseRow): PulsePlace => (type === undefined ? { key } : { key, type });
 const places = ({ merged, split }: PulseRanking): PulseOrder => ({ merged: merged.map(place), split: split.map(place) });
 
 const rankWeek = (week: Week): PulseRankings =>
-  byRole((role) =>
-    ranked(week.models.filter((row) => row.role === role).map(({ key, type, name, people }) => ({ count: people, row: { key, model: name, ...typed(type), share: people / week.roles.get(role)!, people } }))),
-  );
+  byRole((role) => ({
+    ...ranked(week.models.filter((row) => row.role === role).map(({ key, type, name, people }) => ({ count: people, row: { key, model: name, ...typed(type), share: people / week.roles.get(role)!, people } }))),
+    ...listed(week.below.filter((row) => row.role === role).map(({ key, type, name }) => ({ key, model: name, ...typed(type) }))),
+  }));
 
 type Tally = { replies: number; people: Set<string>; names: Map<string | null, number> };
 
@@ -235,17 +266,21 @@ async function chatDay(db: Db, now: number, week: Week): Promise<{ hours: { at: 
     }
   }
   const peopleOf = new Map(week.models.filter((row) => row.role === 'chat').map((row) => [`${row.key}\0${row.type}`, row.people]));
-  const shown = [...tallies].flatMap(([id, tally]) => {
+  const shown: { count: number; row: PulseRow }[] = [];
+  const under: { count: number; row: PulseBelow }[] = [];
+  for (const [id, tally] of tallies) {
     const people = peopleOf.get(id);
-    if (people === undefined || tally.people.size < PULSE_FLOORS.row) return [];
     const [key, type] = id.split('\0') as [string, string];
-    return [{ count: tally.replies, row: { key, model: mostCounted(tally.names), ...typed(type), share: tally.replies / chatCalls, people, replies: rounded(tally.replies) } }];
-  });
+    const model = mostCounted(tally.names);
+    if (people !== undefined && tally.people.size >= PULSE_FLOORS.row) shown.push({ count: tally.replies, row: { key, model, ...typed(type), share: tally.replies / chatCalls, people, replies: rounded(tally.replies) } });
+    else if (key) under.push({ count: tally.replies, row: { key, model, ...typed(type) } });
+  }
   const rest = (split: boolean): PulseRest => {
     const count = chatCalls - shown.reduce((sum, each) => ((each.row.type !== undefined) === split ? sum + each.count : sum), 0);
     return { share: chatCalls ? count / chatCalls : 0, replies: rounded(count) };
   };
-  return { hours, ranking: { ...ranked(shown), rest: { merged: rest(false), split: rest(true) } } };
+  const below = sortCounted(under, ({ count, row }) => [count, row.model, row.type ?? '']).map(({ row }) => row);
+  return { hours, ranking: { ...ranked(shown), rest: { merged: rest(false), split: rest(true) }, ...listed(below) } };
 }
 
 async function board(db: Db, now: number): Promise<PulseBoard | null> {

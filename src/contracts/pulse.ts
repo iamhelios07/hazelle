@@ -39,8 +39,9 @@ export function readPulseHeader(value: string | undefined | null): PulseLabel | 
 }
 
 // A weekly model row shows only with at least `row` distinct people that week (a 대화 row: replied to in the last 24
-// hours); the whole board hides below `board` people sharing that week. Counts of calls round to `round`.
-export const PULSE_FLOORS = { row: 5, board: 10, round: 10 } as const;
+// hours); the whole board hides below `board` people sharing that week. Counts of calls round to `round`. The rows under
+// the floor are named, never counted, only from `below` of them in a view.
+export const PULSE_FLOORS = { row: 5, board: 10, round: 10, below: 2 } as const;
 
 // One ranking row. key: the server's one name for the model across spellings and periods, '' for 기타; a row is the same
 // row in another period by key and type, never by model, whose spelling can change. model: the confirmed name in the
@@ -52,7 +53,10 @@ export type PulseRow = { key: string; model: string | null; type?: string; share
 // rest: the board's 대화 only, the replies of rows below the floor in each view, so the shares there add up to the
 // whole. It names no model and counts no people, so nothing below the floor shows through it.
 export type PulseRest = { share: number; replies: number };
-export type PulseRanking = { merged: PulseRow[]; split: PulseRow[]; rest?: { merged: PulseRest; split: PulseRest } };
+// below: the named rows under the floor in each view, most used first, by name alone. A view lists them only from
+// PULSE_FLOORS.below of them, so no one row's count reads off rest. Absent: none listed in either view.
+export type PulseBelow = Pick<PulseRow, 'key' | 'model' | 'type'>;
+export type PulseRanking = { merged: PulseRow[]; split: PulseRow[]; rest?: { merged: PulseRest; split: PulseRest }; below?: { merged: PulseBelow[]; split: PulseBelow[] } };
 export type PulseRankings = Record<PulseRole, PulseRanking>;
 
 // Who stood where a period earlier, for the rank change marks: the same rows in the same order, nothing else.

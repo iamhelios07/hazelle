@@ -54,8 +54,8 @@ function moveOf(rank: number, was: number | undefined): Ranked['move'] {
   return undefined;
 }
 
-const REST = '순위 밖 모델';
-const REST_HELP = `최근 24시간이나 이번 주에 쓴 사람이 ${PULSE_FLOORS.row}명이 안 되는 모델을 모았어요. 누가 쓴 모델인지 드러나지 않게 이름은 보여 주지 않아요.`;
+export const REST = '순위 밖 모델';
+const REST_HELP = `최근 24시간이나 이번 주에 쓴 사람이 ${PULSE_FLOORS.row}명이 안 되는 모델을 모았어요. 누가 얼마나 썼는지 드러나지 않게 모델마다 숫자는 보여 주지 않아요.`;
 
 const OTHERS_HELP = `이름을 확인할 수 없는 모델은 ${OTHERS}로 묶어 보여 줘요. 제공자의 models.dev 목록에 없는 모델과 ${DIRECT_CONNECTION}로 쓴 모델이에요. 개인 모델 이름이 드러나지 않게 하려고요.`;
 
@@ -81,4 +81,10 @@ export function rankRows(ranking: PulseRanking, before: PulseOrder | null, split
   });
   if (!rest?.share) return ranked;
   return [...ranked, { key: REST, rank: null, name: REST, note: rest.replies ? `응답 ${count(rest.replies)}번` : `응답 ${PULSE_FLOORS.round}번 미만`, value: percent(rest.share), share: rest.share / largest, help: REST_HELP }];
+}
+
+// The server's order, 기타 left out there; a split row whose provider this build cannot name is left out, as in the ranking.
+export function belowNames(ranking: PulseRanking, split: boolean): string[] {
+  if (!ranking.below) return [];
+  return placeRows(ranking.below, split).map(({ row, provider }) => (provider ? `${row.model} (${provider})` : row.model!));
 }
