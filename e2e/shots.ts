@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { CARD, enter, pickBot } from './helpers';
+import { CARD, confirmImport, enter, pickBot } from './helpers';
 
 // The screenshot account on the local dev server (playwright.shots.config.ts), kept across runs so a screenshot
 // script signs in instead of setting up. On a .data/ with no account the first run sets the installation up, with the
@@ -31,5 +31,5 @@ export async function enterShots(page: Page) {
   await pickBot(page);
   await page.getByRole('button', { name: '확인했어요', exact: true }).click();
   await (await chooser).setFiles(CARD);
-  await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '채팅 시작', exact: true }).click();
+  await (await confirmImport(page)).getByRole('button', { name: '채팅 시작', exact: true }).click();
 }

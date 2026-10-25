@@ -251,6 +251,12 @@ export async function importFile(page: Page, button: string | ((page: Page) => P
   const notice = page.getByRole('button', { name: '확인했어요', exact: true });
   if (await notice.isVisible()) await notice.click();
   await (await chooser).setFiles(file);
+  return confirmImport(page);
+}
+
+// Files picked or dropped show what they hold first; 가져오기 saves them and the same dialog becomes their report.
+export async function confirmImport(page: Page) {
+  await page.getByRole('dialog', { name: '가져올까요?', exact: true }).getByRole('button', { name: '가져오기', exact: true }).click();
   const report = page.getByRole('dialog', { name: '가져왔어요', exact: true });
   await expect(report).toBeVisible();
   return report;

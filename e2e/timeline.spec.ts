@@ -2,7 +2,7 @@ import { expect, test, type BrowserContext, type Page, type Route } from '@playw
 import { build, type Rollup } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { GENERATION_STEPS } from '../src/runtime/testing/cache';
-import { CARD, pickBot, settingsPage, signUpAsGuest } from './helpers';
+import { CARD, confirmImport, pickBot, settingsPage, signUpAsGuest } from './helpers';
 
 // A restore here must land between two given requests of a tab, so every /api answer comes from FakeServer, which
 // answers as the objects routes do (server/objects.ts) and switches its timeline when told. Tabs are pages of one
@@ -157,7 +157,7 @@ async function importCard(page: Page) {
   await pickBot(page);
   await page.getByRole('button', { name: '확인했어요', exact: true }).click();
   await (await chooser).setFiles(CARD);
-  await expect(page.getByRole('dialog', { name: '가져왔어요', exact: true })).toBeVisible();
+  await confirmImport(page);
   await page.keyboard.press('Escape');
   await expect(mira(page)).toBeVisible();
 }

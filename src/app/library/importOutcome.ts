@@ -2,8 +2,9 @@ import type { RisuScan, ToolManifest } from '../../tool-api/manifest';
 import { RISU_DECLINED } from '../../tool-api/risu-methods';
 import type { ToolImport } from '../../runtime/tools/store';
 import type { PresetRead } from '../../engine/import/preset';
-import { mergeUnsupported, unsupportedCount, type Imported, type ImportedModule, type Unsupported } from '../../engine/import/types';
+import type { Imported, ImportedModule, ImportedPersona, Unsupported } from '../../engine/import/types';
 import { isToggle } from '../../model/prompt';
+import type { Tool } from '../../model/tool';
 import { unused } from '../../engine/pipeline';
 import type { ImportedCharacter } from '../../runtime/characters';
 import type { ModulePlace } from '../../runtime/modules';
@@ -11,14 +12,18 @@ import type { Stored } from '../../model/kinds';
 import { aliased } from '../common/alias';
 import { packHolds } from '../common/pack';
 import { describeUnused } from '../common/unused';
-import { ALWAYS, DEFAULT_VARIABLES, inSettings, NO_CHARACTER, promptName, RISU_PLUGIN, SCRIPTS, TOOL, toolVersion } from '../common/words';
+import { ALWAYS, DEFAULT_VARIABLES, inSettings, moduleName, NO_CHARACTER, promptName, RISU_PLUGIN, SCRIPTS, toolVersion } from '../common/words';
 import { cardMissed, missedLines, presetMissed } from './missed';
 
-// Completed reports must not retain asset readers: their closures keep the source archive alive. A chat's id is null
-// when the file held several. paired: the prompts a module, or the modules a prompt, was turned on with because a Risu
-// preset named the module. verdict: how much of a Risu plugin works here. replaced: the older versions a module took over from.
-export type ImportOutcome = { file: string; title: string; holds: string; verdict: Line | null; replaced: Line | null; placed: Line | null; paired: Line | null; missed: string[]; unused: string | null } & ({ kind: 'character' | 'module' | 'plugin' | 'prompt' | 'persona'; id: string } | { kind: 'chat'; id: string | null });
-type Line = { text: string; failed: boolean; help?: { label: string; text: string } };
+// Previews and outcomes must not retain asset readers or source bytes: their closures keep the source archive alive.
+// A preview is what the file holds, read before anything is saved; an outcome names only what saving alone could know.
+// verdict: how much of a Risu plugin works here. placed: where it will be, or was, turned on or put.
+export type ImportKind = 'character' | 'module' | 'plugin' | 'prompt' | 'persona' | 'chat';
+// title: the thing's own name, its kind said apart.
+export type Preview = { kind: ImportKind; title: string; holds: string; verdict: Line | null; placed: Line | null; missed: string[]; unused: string | null };
+// A chat's id is null when the file held several.
+export type ImportOutcome = { file: string; title: string; lines: Line[]; missed: string[] } & ({ kind: Exclude<ImportKind, 'chat'>; id: string } | { kind: 'chat'; id: string | null });
+export type Line = { text: string; failed: boolean; help?: { label: string; text: string } };
 // at: where it was dropped (design §6.5), null where nothing takes it. failure: why turning it on there failed.
 export type Placement = { at: ModulePlace['kind'] | null; failure: string | null };
 // prompts: the names of the prompts whose preset named the module, turned on there. failure: why that failed.
@@ -28,74 +33,89 @@ export type Replacing = { names: string[]; places: number; failure: string | nul
 
 const PLACES: Record<ModulePlace['kind'], string> = { character: '이 캐릭터에', prompt: '이 프롬프트에', persona: '이 페르소나에', always: ALWAYS };
 
-export function characterOutcome(file: string, imported: Imported, { id, unsupported, faceless }: ImportedCharacter): ImportOutcome {
-  const { card, lore, assets, report } = imported;
+const preview = (kind: ImportKind, title: string, holds: string, fields: Partial<Omit<Preview, 'kind' | 'title' | 'holds'>> = {}): Preview => ({ kind, title, holds, verdict: null, placed: null, missed: [], unused: null, ...fields });
+const willPlace = (at: ModulePlace['kind'] | null): Line | null => at === null ? null : { text: `${PLACES[at]} 켜요.`, failed: false };
+
+export function characterPreview({ card, lore, assets, report }: Imported): Preview {
   const holds = [
     `첫인사 ${card.greetings.length}개`,
     lore.length > 0 && `로어북 ${lore.length}개`,
     card.regex.length > 0 && `${SCRIPTS.regex} ${card.regex.length}개`,
     card.variables.length > 0 && `${DEFAULT_VARIABLES} ${card.variables.length}개`,
     card.toggles.some(isToggle) && '토글',
-    assets.length - unsupportedCount(unsupported) > 0 && `에셋 ${assets.length - unsupportedCount(unsupported)}개`,
+    assets.length > 0 && `에셋 ${assets.length}개`,
   ].filter(Boolean).join(' · ');
-  return { kind: 'character', file, id, title: card.name, holds, verdict: null, replaced: null, placed: null, paired: null, missed: cardMissed(mergeUnsupported(report.unsupported, unsupported), faceless), unused: describeUnused(unused(card)) };
+  return preview('character', card.name, holds, { missed: missedLines(report.unsupported), unused: describeUnused(unused(card)) });
 }
+
+export const modulePreview = (module: ImportedModule, at: ModulePlace['kind'] | null): Preview =>
+  preview('module', moduleName(module.name), packHolds(module.pack, module.lore.length, module.assets.length), { placed: willPlace(at), missed: missedLines(module.unsupported) });
+
+const putInto = (character: string | null, verb: string) => character === null ? `${NO_CHARACTER} ${verb}` : `${character}에 ${verb}`;
+
+// character: the name of the one they go to, null for 캐릭터 없이, undefined while the user picks it.
+export const chatPreview = (file: string, count: number, missed: string[], character: string | null | undefined): Preview =>
+  preview('chat', file, `채팅 ${count}개`, { placed: character === undefined ? null : { text: putInto(character, '넣어요.'), failed: false }, missed });
+
+export function promptPreview({ prompt, unsupported }: PresetRead): Preview {
+  const toggles = prompt.toggles.filter(isToggle).length;
+  return preview('prompt', promptName(prompt.name), [`블록 ${prompt.blocks.length}개`, toggles > 0 && `토글 ${toggles}개`, prompt.authorNote.trim() && '기본 노트'].filter(Boolean).join(' · '), { missed: presetMissed(unsupported) });
+}
+
+// The picture is the PNG itself, so every persona file holds one.
+export const personaPreview = ({ name, alias }: Pick<ImportedPersona, 'name' | 'alias'>): Preview =>
+  preview('persona', aliased(name, alias), ['설명', alias && '별명', '이미지'].filter(Boolean).join(' · '));
+
+// previous: the tool of the same identity already here, which this version replaces where it is on.
+export const toolPreview = (manifest: ToolManifest, previous: Tool | null, at: ModulePlace['kind'] | null): Preview =>
+  preview(
+    'plugin',
+    manifest.displayName,
+    !previous ? `버전 ${toolVersion(manifest.version)}`
+      : previous.manifest.version === manifest.version ? '같은 버전을 다시 가져와요'
+      : `버전을 바꿔요 · ${toolVersion(previous.manifest.version)} → ${toolVersion(manifest.version)}`,
+    { verdict: manifest.risu ? risuVerdict(manifest.risu) : null, placed: previous ? null : willPlace(at) },
+  );
+
+const outcome = (lines: (Line | null)[]) => lines.filter((line): line is Line => line !== null);
+
+export const characterOutcome = (file: string, title: string, { id, unsupported, faceless }: ImportedCharacter): ImportOutcome =>
+  ({ kind: 'character', file, id, title, lines: [], missed: cardMissed(unsupported, faceless) });
 
 export const quoted = (names: string[]) => names.map((name) => `'${name}'`).join(', ');
 
-export function moduleOutcome(file: string, module: ImportedModule, id: string, unsupported: Unsupported, placement: Placement, { prompts, failure }: Pairing, replacing: Replacing | null): ImportOutcome {
+// unsupported: what the store refused; what the file itself lacked was in its preview.
+export function moduleOutcome(file: string, title: string, id: string, unsupported: Unsupported, placement: Placement, { prompts, failure }: Pairing, replacing: Replacing | null): ImportOutcome {
   const paired = failure !== null ? { text: `프롬프트에 켜지 못했어요. ${failure}`, failed: true } : prompts.length > 0 ? { text: `${quoted(prompts)} 프롬프트에 켰어요.`, failed: false } : null;
   const replaced = replacing && (replacing.failure !== null ? { text: `이전 버전과 바꾸지 못했어요. ${replacing.failure}`, failed: true }
     : { text: `${quoted(replacing.names)} 모듈을 바꿨어요.${replacing.places > 0 ? ' 켜져 있던 곳에 그대로 켰어요.' : ''}`, failed: false });
   const elsewhere = (paired !== null && !paired.failed) || (replacing !== null && replacing.failure === null && replacing.places > 0);
-  return {
-    kind: 'module', file, id, title: `모듈 · ${module.name}`,
-    holds: packHolds(module.pack, module.lore.length, module.assets.length - unsupportedCount(unsupported)),
-    // On for a prompt, or where the version it replaced was, it is not "on nowhere".
-    verdict: null, replaced, placed: placement.at === null && elsewhere ? null : placedLine('modules', placement),
-    paired,
-    missed: missedLines(mergeUnsupported(module.unsupported, unsupported)), unused: null,
-  };
+  // On for a prompt, or where the version it replaced was, it is not "on nowhere".
+  const placed = placement.at === null && elsewhere ? null : placedLine('modules', placement);
+  return { kind: 'module', file, id, title, lines: outcome([replaced, placed, paired]), missed: missedLines(unsupported) };
 }
 
 // character: the name of the one they went to, null for 캐릭터 없이.
-export function chatOutcome(file: string, ids: string[], character: string | null, missed: string[]): ImportOutcome {
-  return { kind: 'chat', file, id: ids.length === 1 ? ids[0]! : null, title: file, holds: `채팅 ${ids.length}개`, verdict: null, replaced: null, placed: { text: character === null ? `${NO_CHARACTER} 넣었어요.` : `${character}에 넣었어요.`, failed: false }, paired: null, missed, unused: null };
-}
+export const chatOutcome = (file: string, ids: string[], character: string | null, missed: string[]): ImportOutcome =>
+  ({ kind: 'chat', file, id: ids.length === 1 ? ids[0]! : null, title: file, lines: [{ text: putInto(character, '넣었어요.'), failed: false }], missed });
 
 // modules: the names of the modules its preset named that were here, turned on for it. waiting: the names it gave that
 // no module answered, as written.
-export function promptOutcome(file: string, { prompt, unsupported }: PresetRead, id: string, modules: string[], waiting: string[]): ImportOutcome {
-  const toggles = prompt.toggles.filter(isToggle).length;
-  return {
-    kind: 'prompt', file, id, title: `프롬프트 · ${promptName(prompt.name)}`,
-    holds: [`블록 ${prompt.blocks.length}개`, toggles > 0 && `토글 ${toggles}개`, prompt.authorNote.trim() && '기본 노트'].filter(Boolean).join(' · '),
-    verdict: null, replaced: null, placed: null,
-    paired: modules.length > 0 ? { text: [`${quoted(modules)} 모듈을 이 프롬프트에 켰어요.`, waiting.length > 0 && `${quoted(waiting)} 모듈은 가져오면 켜져요.`].filter(Boolean).join(' '), failed: false }
-      : waiting.length > 0 ? { text: `${quoted(waiting)} 모듈은 가져오면 이 프롬프트에 켜져요.`, failed: false } : null,
-    missed: presetMissed(unsupported), unused: null,
-  };
+export function promptOutcome(file: string, title: string, id: string, modules: string[], waiting: string[]): ImportOutcome {
+  const paired = modules.length > 0 ? { text: [`${quoted(modules)} 모듈을 이 프롬프트에 켰어요.`, waiting.length > 0 && `${quoted(waiting)} 모듈은 가져오면 켜져요.`].filter(Boolean).join(' '), failed: false }
+    : waiting.length > 0 ? { text: `${quoted(waiting)} 모듈은 가져오면 이 프롬프트에 켜져요.`, failed: false } : null;
+  return { kind: 'prompt', file, id, title, lines: outcome([paired]), missed: [] };
 }
 
-export function personaOutcome(file: string, { id, value }: Stored<'persona'>): ImportOutcome {
-  const holds = ['설명', value.alias && '별명', value.picture !== null && '이미지'].filter(Boolean).join(' · ');
-  return { kind: 'persona', file, id, title: `페르소나 · ${aliased(value.name, value.alias)}`, holds, verdict: null, replaced: null, placed: null, paired: null, missed: cardMissed([], value.picture === null), unused: null };
-}
+export const personaOutcome = (file: string, title: string, { id, value }: Stored<'persona'>): ImportOutcome =>
+  ({ kind: 'persona', file, id, title, lines: [], missed: cardMissed([], value.picture === null) });
 
-const placedLine = (page: 'modules' | 'plugins', { at, failure }: Placement): ImportOutcome['placed'] => at === null
+const placedLine = (page: 'modules' | 'plugins', { at, failure }: Placement): Line => at === null
       ? { text: `아직 어디에도 켜지 않았어요. ${inSettings(page)}에서 켤 수 있어요.`, failed: false }
       : failure === null ? { text: `${PLACES[at]} 켰어요.`, failed: false } : { text: `${PLACES[at]} 켜지 못했어요. ${failure}`, failed: true };
 
-export function toolOutcome(file: string, manifest: ToolManifest, saved: ToolImport, placement: Placement): ImportOutcome {
-  return {
-    kind: 'plugin', file, id: saved.id, title: `${TOOL} · ${manifest.displayName}`,
-    holds: !saved.previous ? `버전 ${toolVersion(manifest.version)}`
-      : saved.previous.manifest.version === manifest.version ? '같은 버전을 다시 가져왔어요'
-      : `버전을 바꿨어요 · ${toolVersion(saved.previous.manifest.version)} → ${toolVersion(manifest.version)}`,
-    verdict: manifest.risu ? risuVerdict(manifest.risu) : null, replaced: null,
-    placed: saved.previous ? null : placedLine('plugins', placement), paired: null, missed: [], unused: null,
-  };
-}
+export const toolOutcome = (file: string, title: string, saved: ToolImport, placement: Placement): ImportOutcome =>
+  ({ kind: 'plugin', file, id: saved.id, title, lines: saved.previous ? [] : [placedLine('plugins', placement)], missed: [] });
 
 // Keyed by every name in RISU_DECLINED.
 export const DECLINED_WORDS: Record<string, string> = {

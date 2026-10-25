@@ -53,8 +53,12 @@ function toolSettings(manifest: ToolManifest, values: Settings): Settings {
   return { ...defaults, ...values };
 }
 
+// The tool of the same identity, which an import of this manifest replaces.
+export const sameTool = (store: Pick<ObjectStore, 'list'>, { name, author }: ToolManifest) =>
+  store.list('tool').find(({ value }) => value.manifest.name === name && value.manifest.author === author);
+
 export async function importTool(store: ObjectStore, files: Files, { manifest, bytes }: ImportedTool): Promise<ApiResult<ToolImport>> {
-  const existing = store.list('tool').find(({ value }) => value.manifest.name === manifest.name && value.manifest.author === manifest.author);
+  const existing = sameTool(store, manifest);
   // Reimport never revives a binned identity or leaves a second live copy beside it.
   if (existing && !live(store.get('module', existing.parent!))) return { ok: false, error: 'gone' };
   const uploaded = await files.save([bytes]);

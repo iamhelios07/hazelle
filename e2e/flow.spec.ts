@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import featherlessModels from '../src/connectors/fixtures/featherless-models.json' with { type: 'json' };
 import { featherless } from '../src/connectors/featherless';
 import { pageCsp } from '../src/server/static';
-import { CARD, DESCRIPTION, FAKE_ADDRESS, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, pickBot, SCRIPTED, settingsPage, setUp } from './helpers';
+import { CARD, confirmImport, DESCRIPTION, FAKE_ADDRESS, FAKE_MODEL, fakeProvider, HOSTILE, MODULE, pickBot, SCRIPTED, settingsPage, setUp } from './helpers';
 
 const PASSWORD = 'e2e-password';
 const NICKNAME = 'rich-steve';
@@ -76,8 +76,8 @@ test('a new account imports a card, chats through the fake provider and finds th
     await pickBot(page);
     await page.getByRole('button', { name: '확인했어요', exact: true }).click();
     await (await chooser).setFiles(CARD);
-    const report = page.getByRole('dialog', { name: '가져왔어요', exact: true });
-    await expect(report).toContainText('첫인사 1개 · 로어북 1개 · 정규식 1개');
+    await expect(page.getByRole('dialog', { name: '가져올까요?', exact: true })).toContainText('첫인사 1개 · 로어북 1개 · 정규식 1개');
+    const report = await confirmImport(page);
     await report.getByRole('button', { name: '채팅 시작', exact: true }).click();
     await expect(messages).toHaveCount(1);
     await expect(messages.first()).toContainText(GREETING);
@@ -172,7 +172,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     const chooser = page.waitForEvent('filechooser');
     await pickBot(page);
     await (await chooser).setFiles(HOSTILE);
-    await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '채팅 시작', exact: true }).click();
+    await (await confirmImport(page)).getByRole('button', { name: '채팅 시작', exact: true }).click();
     const greeting = messages.first();
     // The message is drawn again once its picture loads, so the rest is measured after.
     await expect(greeting.locator('#pic img')).toHaveAttribute('src', /^blob:/);
@@ -202,7 +202,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     const chooser = page.waitForEvent('filechooser');
     await pickBot(page);
     await (await chooser).setFiles(SCRIPTED);
-    await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '채팅 시작', exact: true }).click();
+    await (await confirmImport(page)).getByRole('button', { name: '채팅 시작', exact: true }).click();
     const greeting = messages.first();
     await expect(greeting).toContainText('[door:null]');
     await greeting.getByRole('button', { name: '문 열기', exact: true }).click();
@@ -220,7 +220,7 @@ test('a new account imports a card, chats through the fake provider and finds th
     const chooser = page.waitForEvent('filechooser');
     await pickBot(page);
     await (await chooser).setFiles(MODULE);
-    await page.getByRole('dialog', { name: '가져왔어요', exact: true }).getByRole('button', { name: '모듈 보기', exact: true }).click();
+    await (await confirmImport(page)).getByRole('button', { name: '모듈 보기', exact: true }).click();
     // The switch shows on at once and the write lands behind it; a full navigation before it lands would lose it.
     const landed = page.waitForResponse((response) => response.url().includes('/api/objects/batch') && response.request().method() === 'POST');
     await page.getByRole('switch', { name: '항상 켜기', exact: true }).click();
