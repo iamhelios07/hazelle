@@ -31,7 +31,8 @@ export const taskModelHelp = (task: string, prompted: boolean) => ({
 
 // What a model that takes no picture answers, wherever a picture would go to it.
 export const NO_PICTURES = '이 모델은 이미지를 읽을 수 없어요.';
-export const UNKNOWN_PICTURES = '이 모델이 이미지를 읽는지 알 수 없어요.';
+export const PICTURE_INPUT = '이미지 읽기';
+export const UNKNOWN_PICTURES = `이 모델이 이미지를 읽는지 알 수 없어요. 읽는 모델이면 모델 화면에서 ${PICTURE_INPUT}를 켜 주세요.`;
 
 export const AUX_HELP = '번역이나 장기 기억 정리처럼 대화 밖의 작업에 써요.';
 

@@ -10,7 +10,8 @@ import { NO_PICTURES, UNKNOWN_PICTURES } from '../common/words';
 import { useChildren, useSession } from '../session';
 import { useToast } from '../toast';
 
-// sees: whether the chat's model takes pictures, null where its catalog does not say (asked again on the next attach).
+// sees: whether the chat's model takes pictures, null where neither its catalog nor the user says (asked again on the
+// next attach).
 // moved: the chat's 옮겨 온 그림도 보내기, null in a chat that holds no picture brought from Risu.
 export function useChatPictures(id: string | null, key: string, chat: Chat, route: Route | RouteFailure) {
   const session = useSession();
@@ -18,7 +19,7 @@ export function useChatPictures(id: string | null, key: string, chat: Chat, rout
   const toast = useToast();
   const draft = useSyncExternalStore(drafts.subscribe, () => drafts.pictures(key));
   const brought = useChildren('inlay', id).some(({ value }) => !value.attached && value.type !== SIGNATURE);
-  const sees = 'kind' in route ? false : route.model.input === null ? null : seesPictures(route.model);
+  const sees = 'kind' in route ? false : route.model.input === null && !route.model.pictures ? null : seesPictures(route.model);
 
   async function attach(files: File[]) {
     if ('kind' in route || !(await seesPicturesNow(session, route))) return toast.show(sees === null ? UNKNOWN_PICTURES : NO_PICTURES);

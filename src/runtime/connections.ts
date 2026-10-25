@@ -79,7 +79,7 @@ export const renameConnection = (store: ObjectStore, id: string, label: string) 
 // by then, a write whose answer was lost included, so an entry whose key is there already is not added twice.
 // The first model added that can talk becomes the 대화 모델: until one is set no chat can send, and with one there is
 // nothing to choose between.
-export async function addModel(store: ObjectStore, id: string, model: Model, own: Pick<Starred, 'label' | 'profile' | 'entry'> = {}): Promise<ApiResult<string>> {
+export async function addModel(store: ObjectStore, id: string, model: Model, own: Pick<Starred, 'label' | 'profile' | 'entry' | 'pictures'> = {}): Promise<ApiResult<string>> {
   const key = own.entry ?? model.id;
   const saved = await store.update('connection', id, (current) =>
     current.starred.some((each) => entryKey(each) === key) ? current : { ...current, starred: [...current.starred, { ...snapshotOf(model), ...own }] });
@@ -95,11 +95,12 @@ function ownLabel(label: string): Pick<Starred, 'label'> {
 }
 
 // A further copy starts on a 설정 of its own, a copy of the one the model's first entry uses: copies exist to differ, and
-// on a shared 설정 an edit on one copy's page would change the other. A model that only draws takes no 설정.
+// on a shared 설정 an edit on one copy's page would change the other. A model that only draws takes no 설정. Whether it
+// sees pictures is the model's, so a copy keeps what the first entry was told.
 export async function addCopy(store: ObjectStore, id: string, model: Model, label: string): Promise<ApiResult<string>> {
-  const own = ownLabel(label);
   const connection = store.get('connection', id);
   const first = connection && entriesOf(connection.value, model.id)[0];
+  const own = { ...ownLabel(label), ...(first?.pictures && { pictures: true as const }) };
   const entry = `#${crypto.randomUUID()}`;
   if (!first || imageOnly(first)) return addModel(store, id, model, { ...own, entry });
   const choice = modelProfile(store, first);
@@ -131,6 +132,9 @@ export const putModelBack = (store: ObjectStore, id: string, { entry, index }: T
 export const renameModel = (store: ObjectStore, id: string, key: string, label: string) =>
   store.update('connection', id, (current) => ({ ...current, starred: current.starred.map((model) => (entryKey(model) === key ? { ...without(model, 'label'), ...ownLabel(label) } : model)) }));
 
+export const setModelPictures = (store: ObjectStore, id: string, key: string, on: boolean) =>
+  store.update('connection', id, (current) => ({ ...current, starred: current.starred.map((model) => (entryKey(model) !== key ? model : on ? { ...model, pictures: true as const } : without(model, 'pictures'))) }));
+
 // Key order aside, so a snapshot written in another order is not taken for a change.
 const sameValue = (a: unknown, b: unknown) => {
   const sorted = (value: unknown) => JSON.stringify(value, (_, field: unknown) => (isRecord(field) ? Object.fromEntries(Object.entries(field).sort(([x], [y]) => (x < y ? -1 : 1))) : field));
@@ -159,9 +163,10 @@ export async function refreshStarred(store: ObjectStore, id: string, models: Mod
 }
 
 // A model starred before its catalog's inputs were filled from models.dev keeps an unknown input in its starred copy,
-// which only opening its model list refreshes; asked here, so pictures are not given or held back blind for that.
-export async function seesPicturesNow({ store, catalogs }: Pick<Session, 'store' | 'catalogs'>, { connection, model }: { connection: Stored<'connection'>; model: Model }): Promise<boolean> {
-  if (model.input !== null) return seesPictures(model);
+// which only opening its model list refreshes; asked here, so pictures are not given or held back blind for that. One the
+// user said sees pictures needs no asking.
+export async function seesPicturesNow({ store, catalogs }: Pick<Session, 'store' | 'catalogs'>, { connection, model }: { connection: Stored<'connection'>; model: Starred }): Promise<boolean> {
+  if (model.input !== null || model.pictures) return seesPictures(model);
   const listed = await catalogs.load(connection.value);
   if (!listed.ok) return false;
   await refreshStarred(store, connection.id, listed.models);

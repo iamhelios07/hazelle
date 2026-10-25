@@ -63,13 +63,15 @@ export type Model = {
 };
 
 // profile: the 설정 묶음 it uses; without one, the default 묶음. label: the user's name for the entry; absent, the catalog's
-// name shows. entry: only on a further copy of a model already added, `#` and an id of its own.
+// name shows. entry: only on a further copy of a model already added, `#` and an id of its own. pictures: the user's word
+// that a model whose inputs the catalog leaves unknown sees pictures (seesPictures).
 // The fields an entry owns beside the catalog's snapshot: a refresh keeps them, and a snapshot taken from an entry leaves
 // them out.
-const OWN = ['profile', 'entry', 'label'] as const;
-export type Starred = Model & Partial<Record<(typeof OWN)[number], string>>;
+type Own = { profile: string; entry: string; label: string; pictures: true };
+const OWN: (keyof Own)[] = ['profile', 'entry', 'label', 'pictures'];
+export type Starred = Model & Partial<Own>;
 
-export const ownOf = (model: Starred): Pick<Starred, (typeof OWN)[number]> => Object.fromEntries(OWN.flatMap((field) => (model[field] === undefined ? [] : [[field, model[field]]])));
+export const ownOf = (model: Starred): Partial<Own> => Object.fromEntries(OWN.flatMap((field) => (model[field] === undefined ? [] : [[field, model[field]]])));
 export const snapshotOf = (model: Starred): Model => Object.fromEntries(Object.entries(model).filter(([field]) => !(OWN as readonly string[]).includes(field))) as Model;
 
 // The one key every ModelRef names an entry by. Not a legacy fallback: a model's first entry needs no id of its own, so
@@ -92,8 +94,8 @@ export const entryTerms = (model: Starred) => [entryName(model), model.name, mod
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string; cache?: true; document?: string; pictures?: InputPicture[]; inlays?: string[] };
 // type: the media type; data: the bytes as base64.
 export type InputPicture = { type: string; data: string };
-// A model whose catalog does not say takes no picture: an unknown is never sent one.
-export const seesPictures = (model: Pick<Model, 'input'>) => model.input?.includes('image') === true;
+// A model whose catalog does not say takes no picture unless the user said it does; what a catalog says wins over that.
+export const seesPictures = (model: Pick<Starred, 'input' | 'pictures'>) => (model.input === null ? model.pictures === true : model.input.includes('image'));
 export const carriesPictures = (message: ChatMessage) => (message.pictures?.length ?? 0) > 0;
 export type ChatRequest = { model: Model; messages: ChatMessage[]; settings: ModelSettings };
 

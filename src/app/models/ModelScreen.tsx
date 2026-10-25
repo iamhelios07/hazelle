@@ -6,20 +6,20 @@ import type { Stored } from '../../model/kinds';
 import { modelUsage } from '../../model/usage';
 import { refOf, rolesOf } from '../../connectors/assignment';
 import { imageOnly } from '../../runtime/assignment';
-import { renameModel, retriesOf } from '../../runtime/connections';
+import { renameModel, retriesOf, setModelPictures } from '../../runtime/connections';
 import { modelProfile, ownProfile, profileUsers, setModelProfile } from '../../runtime/profiles';
 import { illustrationPrompt } from '../../runtime/prompts';
 import { LedgerWait, useLedger } from '../common/useLedger';
 import type { SaveStatus } from '../common/saveQueue';
 import { mergeStatus, saveWords, useAutosave } from '../common/useAutosave';
-import { defaultMark, MODEL_ROLES, MODEL_SETTINGS } from '../common/words';
+import { defaultMark, MODEL_ROLES, MODEL_SETTINGS, PICTURE_INPUT } from '../common/words';
 import { spent } from '../common/usage';
 import { ago } from '../common/time';
 import { useConnections, useProfiles, useSettings, useSession } from '../session';
 import { backBar, navigate } from '../shell/router';
 import type { Back } from '../shell/routes';
 import { useToast } from '../toast';
-import { Button, Callout, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow, Tag } from '../ui';
+import { Button, Callout, ChipButton, Divider, Empty, Facts, Menu, MenuItem, NavBar, Row, Screen, Section, SettingGroup, SettingRow, Switch, Tag } from '../ui';
 import { changeWords, defaultFirst, inputs, MODALITY, NOT_CALLABLE } from '../common/settingWords';
 import { useProfileEditor } from './useProfileEditor';
 import { count } from '../common/typedNumber';
@@ -184,6 +184,13 @@ function ChatModelScreen({ connection, model, back }: Props) {
             { label: '모델 ID', value: model.id },
           ]}
         />
+        {model.input === null && (
+          <SettingRow
+            label={PICTURE_INPUT}
+            help="모델 목록이 이 모델의 입력을 알려 주지 않아요. 켜면 메시지에 넣은 이미지를 이 모델에게 보내요."
+            control={<Switch label={PICTURE_INPUT} checked={model.pictures === true} onChange={(on) => void setModelPictures(store, connection.id, entryKey(model), on).then((saved) => saved.ok || toast.failed(saved, '바꾸지 못했어요.'))} />}
+          />
+        )}
       </Section>
 
       <Section title="사용량" note={copies > 1 ? `같은 모델 ${copies}개 합계` : undefined}>

@@ -27,7 +27,7 @@ import {
   withCredential,
   type Route,
 } from './registry';
-import { ConnectorError, type Connection, type Model } from './types';
+import { ConnectorError, type Connection, type Modality, type Model } from './types';
 
 const embedRequest = (...args: Parameters<typeof embedRequests>) => embedRequests(...args)[0]!.request;
 
@@ -422,6 +422,13 @@ describe('chat requests', () => {
       expect(() => chatRequest(anthropic, request)).toThrow(new ConnectorError('no-picture-input'));
       expect(cacheView(anthropic, request).cache).toBe('5m');
     }
+  });
+
+  it('sends pictures to a model the user said sees them only while its catalog leaves its inputs unknown', () => {
+    const generic = connection('generic', { baseUrl: 'https://api.example.com/v1', protocol: 'chat-completions' });
+    const told = (input: Modality[] | null) => ({ model: { ...model({ input }), pictures: true as const }, messages: shown, settings: {} });
+    expect(JSON.parse(chatRequest(generic, told(null)).body!).messages[0].content[0]).toEqual({ type: 'image_url', image_url: { url: 'data:image/png;base64,AAAA' } });
+    expect(() => chatRequest(generic, told(['text']))).toThrow(new ConnectorError('no-picture-input'));
   });
 
   it('reads a request for the cache in the order its wire sends it, with the points it keeps', () => {
