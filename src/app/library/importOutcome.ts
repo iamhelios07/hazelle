@@ -16,7 +16,7 @@ import { cardMissed, missedLines, presetMissed } from './missed';
 
 // Completed reports must not retain asset readers: their closures keep the source archive alive. A chat's id is null
 // when the file held several. paired: the prompts a module, or the modules a prompt, was turned on with because a Risu
-// preset named the module. verdict: how much of a Risu plugin works here. replaced: the older versions a module took over from.
+// preset named the module. verdict: the Risu API name scan's result and limits. replaced: the older versions a module took over from.
 export type ImportOutcome = { file: string; title: string; holds: string; verdict: Line | null; replaced: Line | null; placed: Line | null; paired: Line | null; missed: string[]; unused: string | null } & ({ kind: 'character' | 'module' | 'plugin' | 'prompt' | 'persona'; id: string } | { kind: 'chat'; id: string | null });
 type Line = { text: string; failed: boolean; help?: { label: string; text: string } };
 // at: where it was dropped (design §6.5), null where nothing takes it. failure: why turning it on there failed.
@@ -113,7 +113,10 @@ function risuVerdict({ verdict, missing }: RisuScan): Line {
   const later = missing.filter((name) => !RISU_DECLINED.has(name));
   const listed = [never.length > 0 && `앞으로도 지원하지 않아요: ${never.join(', ')}.`, later.length > 0 && `아직 지원하지 않아요: ${later.join(', ')}.`].filter(Boolean).join(' ');
   switch (verdict) {
-    case 'all': return { text: `${RISU_PLUGIN} 기능이 다 돼요.`, failed: false };
+    case 'all': return {
+      text: `${RISU_PLUGIN}에서 알려진 미지원 기능은 찾지 못했어요. 실제 동작은 확인이 필요해요.`, failed: false,
+      help: { label: '확인 범위', text: '파일에 적힌 API 이름만 확인했어요. 화면 접근, 데이터 항목, 호출 옵션에 따라 일부 기능이 동작하지 않을 수 있어요.' },
+    };
     case 'partial': return { text: `${RISU_PLUGIN} 기능 중 일부는 빠져요.`, failed: true, help: { label: '빠지는 기능', text: listed } };
     case 'unread': return { text: `${RISU_PLUGIN} 기능이 다 되는지 확인하지 못했어요.`, failed: true, help: { label: '확인하지 못한 이유', text: ['플러그인이 기능을 다른 이름으로 불러서 다 읽지 못했어요. 쓰다가 안 되는 기능이 있을 수 있어요.', listed].filter(Boolean).join(' ') } };
   }

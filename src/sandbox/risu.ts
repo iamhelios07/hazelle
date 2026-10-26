@@ -1,9 +1,9 @@
-import { RISU_DECLINED, RISU_REPLACERS } from '../tool-api/risu-methods';
+import { RISU_REPLACERS } from '../tool-api/risu-methods';
 
 // RisuAI's v3 plugin API over the public Hazelle tool API (research/risu-plugin-adapter-plan.md §3). Risu's shapes
 // live only in this file and it calls nothing but `api`: nothing Risu-shaped crosses tool-api/protocol.ts, so the
-// host's contract stays Hazelle's own. A name it does not map yet throws when called; a declined one reads as undefined,
-// as on a Risu without it, so a plugin's typeof guard takes its other branch. Either is told to 점검, never passed silently.
+// host's contract stays Hazelle's own. Every unmapped name reads as undefined so a plugin's feature check can take its
+// fallback. Access is told to 점검 once; unsupported kinds of a mapped method are refused when called.
 
 type Callback = () => unknown;
 type MessageAction = (message: { chatId: string; index: number }) => unknown;
@@ -106,6 +106,8 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     throw new Error(`Risu API '${name}' is not available in Hazelle`);
   };
   const buttons = new Map<string, { label: string; run: Callback }>();
+  // A separate menu id keeps a setting and a button with the same public id independently reachable.
+  const settings = new Map<string, { label: string; run: Callback; menuId: string }>();
   const messageActions = new Map<string, { label: string; run: MessageAction }>();
   // Where each chatId handed out was, as read: a picture often lands after the user moved to another chat, whose messages
   // the frame's chat then reads instead.
@@ -118,12 +120,15 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   };
   // Risu's three button places (action, chat, hamburger) are one ⋯ here, so a button a plugin offers in two of them
   // (Asset Maid, SimCore) is listed once. Splitting by place instead would strand one only in the side menu (Fishing's 도감).
-  const listedButtons = () => {
+  const listedMenu = () => {
     const labels = new Set<string>();
-    return [...buttons].flatMap(([id, { label }]) => labels.has(label) ? [] : (labels.add(label), [{ id, label }]));
+    return [
+      ...[...buttons].flatMap(([id, { label }]) => labels.has(label) ? [] : (labels.add(label), [{ id, label }])),
+      // One setting stays the default Open action; several need a selectable entry for each screen.
+      ...(settings.size > 1 ? [...settings.values()].map(({ menuId, label }) => ({ id: menuId, label })) : []),
+    ];
   };
   const listedActions = () => [...messageActions].map(([id, { label }]) => ({ id, label }));
-  const settings = new Map<string, Callback>();
   const replacers = { beforeRequest: new Set<Replacer>(), afterRequest: new Set<Replacer>() };
   const handlers: Record<Mode, Set<Handler>> = { display: new Set(), output: new Set(), input: new Set(), process: new Set() };
   const listeners = new Set<Listener>();
@@ -173,22 +178,26 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
   // The three Risu stores are one synced tool storage here, each under its own prefix so their keys never meet.
   const local = storage('local:');
   const mapped: Scope = {
+    apiVersion: '3.0',
+    apiVersionCompatibleWith: ['3.0'],
     getRuntimeInfo: async () => ({ apiVersion: '3.0', platform: 'hazelle', saveMethod: 'account' }),
     showContainer: async () => frame.show(),
     hideContainer: async () => frame.hide(),
     registerButton: async (arg: { name: string; id?: string }, callback: Callback) => {
       const id = arg.id ?? crypto.randomUUID();
       buttons.set(id, { label: arg.name, run: callback });
-      frame.menu(listedButtons());
+      frame.menu(listedMenu());
       return { id };
     },
-    registerSetting: async (_name: string, callback: Callback, _icon?: string, _iconType?: string, id = crypto.randomUUID()) => {
-      settings.set(id, callback);
+    registerSetting: async (name: string, callback: Callback, _icon?: string, _iconType?: string, id = crypto.randomUUID()) => {
+      settings.set(id, { label: name, run: callback, menuId: settings.get(id)?.menuId ?? crypto.randomUUID() });
+      frame.menu(listedMenu());
       return { id };
     },
     unregisterUIPart: async (id: string) => {
-      settings.delete(id);
-      if (buttons.delete(id)) frame.menu(listedButtons());
+      const setting = settings.delete(id);
+      const button = buttons.delete(id);
+      if (setting || button) frame.menu(listedMenu());
     },
     onUnload: async (callback: Callback) => { unloads.push(callback); },
     log: async (message: string) => console.log(message),
@@ -332,7 +341,6 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     get: (target, name) => {
       if (typeof name === 'symbol' || name === 'then') return undefined;
       if (Object.hasOwn(target, name)) return target[name];
-      if (!RISU_DECLINED.has(name)) return async () => refuse(name);
       tell(name);
       return undefined;
     },
@@ -394,14 +402,14 @@ export function installRisu(api: Hazelle.Api, scope: Scope): () => void {
     api.on(stage, stages[stage] as never);
   };
 
-  api.on('menu', (_chat, item) => press(buttons.get(item)?.run));
+  api.on('menu', (_chat, item) => press([...settings.values()].find(({ menuId }) => menuId === item)?.run ?? buttons.get(item)?.run));
   api.on('action', (chat, item, message) => {
     const action = messageActions.get(item);
     if (!action) return;
     place(chat, message);
     press(() => action.run({ chatId: message.id, index: message.index }));
   });
-  api.on('open', () => press(settings.values().next().value));
+  api.on('open', () => press(settings.values().next().value?.run));
   api.on('reply', async (chat, reply) => {
     if (!listeners.size) return;
     const card = await chat.card();

@@ -146,13 +146,73 @@ describe('the Risu adapter', () => {
     expect(fake.menus.at(-1)).toEqual([{ id: 'hero', label: '용사' }]);
   });
 
-  it('maps exactly the shared list; any other name throws by name and is told to 점검 once', async () => {
+  it('lets a plugin select v3 through the version properties on either API alias', async () => {
+    const fake = fakeApi();
+    const scope = install(fake);
+    await runInNewContext(risuScript(`
+      if (risuai.apiVersion === '3.0' && Risuai.apiVersionCompatibleWith.includes('3.0')) {
+        await risuai.registerButton({ name: 'v3', id: 'version' }, () => {});
+      }
+    `), scope);
+    expect(fake.menus.at(-1)).toEqual([{ id: 'version', label: 'v3' }]);
+    expect(fake.missing).toEqual([]);
+  });
+
+  it('lets a plugin use its fallback when an optional API is not implemented', async () => {
+    const fake = fakeApi();
+    await runInNewContext(risuScript(`
+      if (typeof risuai.readInlay === 'function') {
+        await risuai.readInlay('picture');
+      } else {
+        await risuai.registerButton({ name: 'Fallback', id: 'fallback' }, () => {});
+      }
+    `), install(fake));
+    expect(fake.menus.at(-1)).toEqual([{ id: 'fallback', label: 'Fallback' }]);
+  });
+
+  it('makes every setting selectable, keeps its menu id when replaced, and removes its entry when unregistered', async () => {
+    const fake = fakeApi();
+    const { Risuai } = install(fake);
+    const first = vi.fn();
+    const second = vi.fn();
+    const replacement = vi.fn();
+    const button = vi.fn();
+    await Risuai.registerButton!({ name: 'Button', id: 'shared' } as never, button as never);
+    await Risuai.registerSetting!('First' as never, first as never, undefined as never, undefined as never, 'shared' as never);
+    await Risuai.registerSetting!('Second' as never, second as never, undefined as never, undefined as never, 'second' as never);
+    const menu = fake.menus.at(-1)!;
+    expect(menu.map(({ label }) => label)).toEqual(['Button', 'First', 'Second']);
+    expect(new Set(menu.map(({ id }) => id)).size).toBe(3);
+    for (const { id } of menu) fake.fire('menu', fake.chat, id);
+    await vi.waitFor(() => {
+      expect(button).toHaveBeenCalledTimes(1);
+      expect(first).toHaveBeenCalledTimes(1);
+      expect(second).toHaveBeenCalledTimes(1);
+    });
+    await Risuai.registerSetting!('Updated' as never, replacement as never, undefined as never, undefined as never, 'second' as never);
+    expect(fake.menus.at(-1)![2]).toEqual({ id: menu[2]!.id, label: 'Updated' });
+    fake.fire('menu', fake.chat, menu[2]!.id);
+    await vi.waitFor(() => expect(replacement).toHaveBeenCalledTimes(1));
+    expect(second).toHaveBeenCalledTimes(1);
+    await Risuai.unregisterUIPart!('shared' as never);
+    expect(fake.menus.at(-1)).toEqual([]);
+    fake.fire('menu', fake.chat, menu[1]!.id);
+    fake.fire('open', fake.chat);
+    await vi.waitFor(() => expect(replacement).toHaveBeenCalledTimes(2));
+    expect(first).toHaveBeenCalledTimes(1);
+    await Risuai.unregisterUIPart!('second' as never);
+    fake.fire('open', fake.chat);
+    await Promise.resolve();
+    expect(replacement).toHaveBeenCalledTimes(2);
+  });
+
+  it('maps the shared list, leaves other properties undefined and reports each missing name once', async () => {
     const fake = fakeApi();
     const scope = install(fake);
     const { Risuai } = scope;
     for (const name of RISU_MAPPED) expect(Risuai[name], name).toBeDefined();
-    await expect(Risuai.readInlay!()).rejects.toThrow("Risu API 'readInlay' is not available in Hazelle");
-    await expect(Risuai.readInlay!()).rejects.toThrow();
+    expect(Risuai.readInlay).toBeUndefined();
+    expect(Risuai.readInlay).toBeUndefined();
     expect(typeof Risuai.addProvider).toBe('undefined');
     await expect(Risuai.addRisuReplacer!('beforeTranslate' as never, (() => []) as never)).rejects.toThrow("'addRisuReplacer:beforeTranslate'");
     expect((Risuai as Record<string, unknown>).then).toBeUndefined();

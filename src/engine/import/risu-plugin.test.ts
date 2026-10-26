@@ -26,7 +26,7 @@ describe('a .js file', () => {
     expect(read('//@name Asset Maid\n//@api 3.0')).toMatchObject({ ok: true, tool: { manifest: { name: 'Asset Maid' } } });
   });
 
-  it('reads Side Phone 0.1.0 and Fishing 1.2.3 as working in full', () => {
+  it('finds no unmapped API names in the Side Phone 0.1.0 and Fishing 1.2.3 excerpts', () => {
     expect(read(sidePhone)).toMatchObject({ ok: true, tool: { manifest: {
       name: 'Webso_Phone_v0.1.0', displayName: '사이드폰 플러그인', version: '0.1.0', description: '', uses: ['model', 'network'],
       risu: { verdict: 'all', missing: [], hosts: ['cdn.jsdelivr.net'] },
@@ -47,6 +47,9 @@ describe('a .js file', () => {
 });
 
 describe('the Risu scan', () => {
+  it('recognizes version properties as mapped', () => {
+    expect(scanRisu("if (risuai.apiVersion === '3.0' && Risuai.apiVersionCompatibleWith.includes('3.0')) start();")).toEqual({ verdict: 'all', missing: [], hosts: [] });
+  });
   it('lists nothing missing when every name is mapped, reading a quoted risuai as a string and Risu\'s site as a URL', () => {
     expect(scanRisu("await Risuai.showContainer('fullscreen'); risuai['getArgument']('x'); risuai?.addRisuReplacer('afterRequest', f); const p = 'risuai'; const u = 'https://sv.risuai.xyz/a';")).toEqual({ verdict: 'all', missing: [], hosts: ['sv.risuai.xyz'] });
   });

@@ -8,7 +8,8 @@ export type ToolUse = 'model' | 'embed' | 'memory' | 'network';
 export type ToolField = { key: string; type: 'text' | 'number' | 'switch' | 'choice'; label: string; options?: string[]; default?: string | number | boolean; composer?: true };
 // The import scan of a Risu v3 plugin (research/risu-plugin-adapter-plan.md §4). missing: Risu methods the file names that
 // the adapter refuses or does not map yet. hosts: literal hosts in its code. 'unread': the API object is aliased, so its use
-// could not be listed.
+// could not be listed. 'all' means every detected top-level API name is mapped; returned objects, arguments and runtime
+// behavior are not checked, so it does not establish full compatibility.
 export type RisuScan = { verdict: 'all' | 'partial' | 'unread'; missing: string[]; hosts: string[] };
 // actions and composer are absent on a tool stored before they existed, which declares none.
 // risu: present only on a Risu v3 plugin, whose tool runs through the adapter.

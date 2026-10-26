@@ -648,19 +648,25 @@ it('runs a frame tool as one frame: its registered items, a press from the chat,
   const module = added.data.id;
   const pressed = vi.fn();
   const opens = vi.fn();
+  const extra = vi.fn();
   const transport = inProcessRisu((scope) => {
     const risu = scope.Risuai as Record<string, (...args: unknown[]) => Promise<unknown>>;
     void risu.registerButton!({ name: 'Cast', id: 'cast' }, async () => { pressed(await risu.getCurrentChatIndex!()); await risu.showContainer!('fullscreen'); });
     void risu.registerSetting!('Open', () => { opens(); return risu.showContainer!('fullscreen'); });
+    void risu.registerSetting!('Extra', extra);
   });
   const host = connect(transport.open);
   try {
     await host.warm(chat);
     const { items } = host;
-    await vi.waitFor(() => expect(items(module)).toEqual([{ id: 'cast', label: 'Cast' }]));
+    await vi.waitFor(() => expect(items(module).map(({ label }) => label)).toEqual(['Cast', 'Open', 'Extra']));
+    const menu = items(module);
     expect(transport.frames.map((frame) => frame.api?.context)).toEqual(['frame']);
+    await session.scriptCommands.menu(chat, module, menu[2]!.id);
+    await vi.waitFor(() => expect(extra).toHaveBeenCalledTimes(1));
+    expect(opens).not.toHaveBeenCalled();
     await session.scriptCommands.menu(chat, module, 'cast');
-    await vi.waitFor(() => expect(host.frames().get(module)).toEqual({ menu: [{ id: 'cast', label: 'Cast' }], actions: [], chat, asking: true }));
+    await vi.waitFor(() => expect(host.frames().get(module)).toEqual({ menu, actions: [], chat, asking: true }));
     expect(pressed.mock.calls[0]![0]).toEqual(expect.any(Number));
     expect(pressed.mock.calls[0]![0]).not.toBe(-1);
     const shownIn = { chat, place: vi.fn(), close: vi.fn() };

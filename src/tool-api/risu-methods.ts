@@ -14,6 +14,7 @@ export const RISU_NAMES: readonly string[] = [
 // The adapter (src/sandbox/risu.ts) maps exactly these Risu v3 names; the import scan lists every other name a plugin
 // uses as missing. Both read this file, so a name mapped later is added here and nowhere else.
 export const RISU_MAPPED: ReadonlySet<string> = new Set([
+  'apiVersion', 'apiVersionCompatibleWith',
   'showContainer', 'hideContainer', 'registerButton', 'registerSetting', 'unregisterUIPart', 'onUnload', 'log',
   'pluginStorage', 'getLocalPluginStorage', 'safeLocalStorage', 'getArgument', 'getArg', 'requestPluginPermission',
   'getCharacter', 'getChar', 'getCurrentCharacterIndex', 'getCurrentChatIndex', 'getChatFromIndex', 'setChatToIndex',
@@ -23,8 +24,8 @@ export const RISU_MAPPED: ReadonlySet<string> = new Set([
 ]);
 // addRisuReplacer kinds the adapter runs; another kind is missing as `addRisuReplacer:<kind>`.
 export const RISU_REPLACERS: ReadonlySet<string> = new Set(['beforeRequest', 'afterRequest']);
-// Declined for good (design §6.10): the adapter answers them undefined, and the import words them apart from names not
-// mapped yet. getRootDocument:page: the app's page past a drawn message, which getRootDocument finds nowhere.
+// Declined for good (design §6.10): the import words them apart from names not mapped yet. All unmapped properties
+// read as undefined. getRootDocument:page: the app's page past a drawn message, which getRootDocument finds nowhere.
 export const RISU_DECLINED: ReadonlySet<string> = new Set([
   'getRootDocument:page', 'addProvider', 'registerBodyIntercepter', 'unregisterBodyIntercepter', 'addPluginChannelListener', 'postPluginChannelMessage',
 ]);

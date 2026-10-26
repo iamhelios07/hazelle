@@ -413,7 +413,7 @@ function Summary({ result }: { result: ImportOutcome }) {
   return (
     <Section level={3} title={result.title}>
       <Text>{result.holds}</Text>
-      {[result.verdict, result.replaced, result.placed, result.paired].map((line, index) => line && (line.failed ? <Callout key={index} tone="warn">{line.text}{line.help && <Hint label={line.help.label}>{line.help.text}</Hint>}</Callout> : <Text key={index}>{line.text}</Text>))}
+      {[result.verdict, result.replaced, result.placed, result.paired].map((line, index) => line && (line.failed ? <Callout key={index} tone="warn">{line.text}{line.help && <Hint label={line.help.label}>{line.help.text}</Hint>}</Callout> : <Text key={index}>{line.text}{line.help && <Hint label={line.help.label}>{line.help.text}</Hint>}</Text>))}
       {result.missed.length > 0 && <Missed lines={result.missed} />}
       {result.unused && <Text variant="note">{result.unused}</Text>}
     </Section>

@@ -70,13 +70,22 @@ it('names the modules a preset waits for, beside or without those turned on', ()
   expect(promptOutcome('so.risup', read, 'prompt', [], ['소악마에셋']).paired?.text).toBe("'소악마에셋' 모듈은 가져오면 이 프롬프트에 켜져요.");
 });
 
-it('says how much of a Risu plugin works, wording declined names apart from those not mapped yet', () => {
+it('reports the scan scope without promising full compatibility, wording declined names apart from those not mapped yet', () => {
   const verdict = (source: string) => {
     const read = readToolFile(new TextEncoder().encode(`//@name plug\n//@api 3.0\n${source}`));
     if (!read.ok) throw new Error('fixture');
     return toolOutcome('plug.js', read.tool.manifest, { id: 'm', previous: null }, { at: null, failure: null }).verdict;
   };
-  expect(verdict('risuai.showContainer("fullscreen")')).toEqual({ text: 'Risu 플러그인 기능이 다 돼요.', failed: false });
+  for (const source of [
+    'risuai.showContainer("fullscreen")',
+    'const doc = await risuai.getRootDocument(); await doc.createElement("div");',
+    'const db = await risuai.getDatabase(["temperature"]); console.log(db.temperature);',
+  ]) {
+    expect(verdict(source)).toEqual({
+      text: 'Risu 플러그인에서 알려진 미지원 기능은 찾지 못했어요. 실제 동작은 확인이 필요해요.', failed: false,
+      help: { label: '확인 범위', text: '파일에 적힌 API 이름만 확인했어요. 화면 접근, 데이터 항목, 호출 옵션에 따라 일부 기능이 동작하지 않을 수 있어요.' },
+    });
+  }
   expect(verdict('risuai.addProvider(); risuai.registerBodyIntercepter(); risuai.readInlay()')).toEqual({
     text: 'Risu 플러그인 기능 중 일부는 빠져요.', failed: true,
     help: { label: '빠지는 기능', text: '앞으로도 지원하지 않아요: 모델 제공자 추가, 모델 요청 내용 바꾸기. 아직 지원하지 않아요: readInlay.' },
